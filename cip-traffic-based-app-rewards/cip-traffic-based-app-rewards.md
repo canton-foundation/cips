@@ -9,7 +9,7 @@
   Type: Tokenomics
   Created: 2026-01-29
   Approved:
-  Post-History: TBD
+  Post-History: https://lists.sync.global/g/cip-discuss/message/511
 </pre>
 
 # CIP TBD:  Traffic-Based App Rewards
