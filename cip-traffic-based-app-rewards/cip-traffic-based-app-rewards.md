@@ -16,11 +16,15 @@
 
 ## Abstract
 
-This CIP proposes to improve the quality of the app reward incentives by removing featured app markers and instead basing an app’s rewards on the actual traffic spent on (sub-)transactions that change the state managed by the app. This is achieved by measuring traffic spent directly on the Global Synchronizer using only sequencer and mediator data. This removes the need for app builders to create `FeaturedAppActivityMarker`s in all the right places, and instead measures the *actual burn* contributed by *all activity* of an app provider party by default.
+This CIP proposes to improve the quality of the app reward incentives by removing featured app markers and instead basing an app’s rewards on the actual traffic spent on (sub-)transactions that change the state managed by the app.
+This is achieved by measuring traffic spent directly on the Global Synchronizer using only sequencer and mediator data.
+This removes the need for app builders to create `FeaturedAppActivityMarker`s in all the right places, and instead measures the *actual burn* contributed by *all activity* of an app provider party by default.
 
-To enable validator operators to manage the traffic costs incurred by validating (as opposed to submitting) transactions and to foster decentralization of apps and wallets, this CIP also proposes to make protocol-conformant confirmation responses free. Thus validator nodes only pay for the submission of transactions by their users, which is an action that validators can explicitly gate, and charge for, if required.
+To enable validator operators to manage the traffic costs incurred by validating (as opposed to submitting) transactions and to foster decentralization of apps and wallets, this CIP also proposes to make protocol-conformant confirmation responses free.
+Thus validator nodes only pay for the submission of transactions by their users, which is an action that validators can explicitly gate, and charge for, if required.
 
-This CIP further proposes to implement these changes in a way that improves the throughput of the Global Synchronizer, and reduces the transaction cost of app transactions. Concretely it proposes to avoid using the `DSO` party in app transactions for the sole purpose of recording app activity, thereby reducing the size of app transactions, and avoiding the need for the SV nodes to validate and confirm extra sub-transactions concerning the `DSO` party.
+This CIP further proposes to implement these changes in a way that improves the throughput of the Global Synchronizer, and reduces the transaction cost of app transactions.
+Concretely it proposes to avoid using the `DSO` party in app transactions for the sole purpose of recording app activity, thereby reducing the size of app transactions, and avoiding the need for the SV nodes to validate and confirm extra sub-transactions concerning the `DSO` party.
 
 ## Specification
 
@@ -28,9 +32,12 @@ This CIP further proposes to implement these changes in a way that improves the 
 
 #### Record Activity Based on Sequencer and Mediator Data
 
-Change the app activity recording such that the traffic cost of each envelope of a *successful* confirmation request is granted in equal shares as app reward weight for all app provider parties that are informees of the views contained in the envelope. The app provider parties are computed deterministically by reading `FeaturedAppRight`s as-of the time that the mining round opens.
+Change the app activity recording such that the traffic cost of each envelope of a *successful* confirmation request is granted in equal shares as app reward weight for all app provider parties that are informees of the views contained in the envelope.
+The app provider parties are computed deterministically by reading `FeaturedAppRight`s as-of the time that the mining round opens.
 
-These records are ingested by the SV app based on the mediator verdicts from the mediator scan API, and from the sequencer using a new sequencer traffic scan API. They replace the use of `FeaturedAppActivityMarker`s and `AppRewardCoupon`s as activity records. The Daml code for `splice-amulet` is changed such that neither `FeaturedAppActivityMarker` nor `AppRewardCoupon` contracts are created anymore.
+These records are ingested by the SV app based on the mediator verdicts from the mediator scan API, and from the sequencer using a new sequencer traffic scan API.
+They replace the use of `FeaturedAppActivityMarker`s and `AppRewardCoupon`s as activity records.
+The Daml code for `splice-amulet` is changed such that neither `FeaturedAppActivityMarker` nor `AppRewardCoupon` contracts are created anymore.
 
 ##### Round attribution
 
@@ -38,13 +45,17 @@ Recall that mining rounds are preannounced and there are always at least two rou
 
 ![Overview diagram of minting rounds and their phases](cc_minting_rounds.png)
 
-This CIP proposes to assign the activity records resulting from a confirmation request to the earliest round that is open at the time the confirmation request was sequenced. That round is always guaranteed to be open for activity recording, and closes the soonest.
+This CIP proposes to assign the activity records resulting from a confirmation request to the earliest round that is open at the time the confirmation request was sequenced.
+That round is always guaranteed to be open for activity recording, and closes the soonest.
 
 ##### Activity Record Computation Details
 
-The activity record computation is structured such that for a confirmation request that involves only a single app, all traffic spent for that request is attributed to that one app. For confirmation requests involving multiple apps, the computation shares the credit in equal amounts per envelope. This is done as follows:
+The activity record computation is structured such that for a confirmation request that involves only a single app, all traffic spent for that request is attributed to that one app.
+For confirmation requests involving multiple apps, the computation shares the credit in equal amounts per envelope.
+This is done as follows:
 
-1. Compute the informees of an envelope as the union of the informees of the views in that envelope. Use the view hashes visible to the sequencer on the confirmation request to determine the views contained in the envelope.
+1. Compute the informees of an envelope as the union of the informees of the views in that envelope.
+Use the view hashes visible to the sequencer on the confirmation request to determine the views contained in the envelope.
 2. Determine the app informees as the parties for which a `FeaturedAppRight` is active at round start time.
 3. Determine `total_app_envelopes_traffic` as the total amount of traffic of envelopes that have at least one app informee.
 4. Let `total_confirmation_request_traffic` denote the total traffic cost of the confirmation request.
@@ -58,15 +69,18 @@ The activity record computation is structured such that for a confirmation reque
 
    and attribute `per_app_traffic_weight` to every app informee of the envelope.
 
-Note that the computation in Item 5 takes care of distributing the traffic cost not attributed to app envelopes in a weighted fashion among the app envelopes. When all envelopes have an app informee, it becomes `per_app_traffic_weight = envelope_traffic_cost / num_app_informees`, as expected.
+Note that the computation in Item 5 takes care of distributing the traffic cost not attributed to app envelopes in a weighted fashion among the app envelopes.
+When all envelopes have an app informee, it becomes `per_app_traffic_weight = envelope_traffic_cost / num_app_informees`, as expected.
 
-All computations are performed using integer arithmetic. For confirmation requests whose traffic size is below 100 MB, they can be performed with 64-bit signed integers without risk of overflow.
+All computations are performed using integer arithmetic.
+For confirmation requests whose traffic size is below 100 MB, they can be performed with 64-bit signed integers without risk of overflow.
 
 #### Adjust App Reward Accounting
 
 This CIP proposes to change the accounting of the minting allowance of app provider parties away from using *many* `FeaturedAppActivityMarker` and `AppRewardCoupon` contracts per party per round, and instead have the DSO create exactly one coupon per round for every party whose app rewards for the round surpass the `appRewardCouponThreshold` (new Amulet config parameter; default, $0.5).
 
-The coupons are valid for `appRewardCouponLifetime` (new Amulet config parameter; default, 24h) measured from the time they are created. This allows app providers to batch their minting across multiple rounds and thus lower their traffic cost, and the load on the DSO party.
+The coupons are valid for `appRewardCouponLifetime` (new Amulet config parameter; default, 24h) measured from the time they are created.
+This allows app providers to batch their minting across multiple rounds and thus lower their traffic cost, and the load on the DSO party.
 
 The coupon amounts are computed as follows:
 
@@ -78,11 +92,13 @@ The coupon amounts are computed as follows:
 
 App rewards for parties below the threshold are burned.
 
-Note that the minting workflows for SV rewards, validator rewards, and the ecosystem development fund from [CIP-82](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0082/cip-0082.md) remain unchanged as part of this CIP. Only the workflow for app rewards is changed.
+Note that the minting workflows for SV rewards, validator rewards, and the ecosystem development fund from [CIP-82](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0082/cip-0082.md) remain unchanged as part of this CIP.
+Only the workflow for app rewards is changed.
 
 ##### App Reward Computation Details
 
-The overall design proposed by this CIP is compatible with creating activity records for both unfeatured and featured apps, thereby keeping it compatible with the reward computation from the [Canton Coin whitepaper](https://www.digitalasset.com/hubfs/Canton%20Network%20Files/Documents%20\(whitepapers%2c%20etc...\)/Canton%20Coin_%20A%20Canton-Network-native%20payment%20application.pdf?__hstc=169870847.16854726061d8b28be85af48c17588c4.1750870506327.1750870506327.1750870506327.1&__hssc=169870847.1.1750870506328&__hsfp=1243925796&_gl=1*1fkzmuj*_gcl_au*MTkyOTE1NjAyNC4xNzUwODcwNTA2*_ga*NDU1NzM2NzgyLjE3NTA4NzA1MDY.*_ga_GVK9ZHZSMR*czE3NTA4NzA1MDUkbzEkZzAkdDE3NTA4NzA1MDUkajYwJGwwJGgw), which assigns different caps to unfeatured and featured apps. The implementation proposed by this CIP only supports rewarding featured apps for the reasons given in the rationale section on [Rewards for Unfeatured Apps](#rewards-for-unfeatured-apps).
+The overall design proposed by this CIP is compatible with creating activity records for both unfeatured and featured apps, thereby keeping it compatible with the reward computation from the [Canton Coin whitepaper](https://www.digitalasset.com/hubfs/Canton%20Network%20Files/Documents%20\(whitepapers%2c%20etc...\)/Canton%20Coin_%20A%20Canton-Network-native%20payment%20application.pdf?__hstc=169870847.16854726061d8b28be85af48c17588c4.1750870506327.1750870506327.1750870506327.1&__hssc=169870847.1.1750870506328&__hsfp=1243925796&_gl=1*1fkzmuj*_gcl_au*MTkyOTE1NjAyNC4xNzUwODcwNTA2*_ga*NDU1NzM2NzgyLjE3NTA4NzA1MDY.*_ga_GVK9ZHZSMR*czE3NTA4NzA1MDUkbzEkZzAkdDE3NTA4NzA1MDUkajYwJGwwJGgw), which assigns different caps to unfeatured and featured apps.
+The implementation proposed by this CIP only supports rewarding featured apps for the reasons given in the rationale section on [Rewards for Unfeatured Apps](#rewards-for-unfeatured-apps).
 
 The CIP proposes to use the following computation to compute the minting allowances for app provider parties in a round:
 
@@ -107,15 +123,20 @@ All computations that involve CC are performed using decimals with the same prec
 
 #### Beneficiary Party Support
 
-The implementation of featured app activity markers supports fine grained, per-transaction activity attribution to multiple beneficiary parties. For scalability reasons, this CIP proposes to replace per-transaction attribution of beneficiary parties with the same construction that is used to manage beneficiaries of SV rewards: as part of minting, the app provider party can specify a list of beneficiaries and the amount of CC they should receive out of the minted allowance.
+The implementation of featured app activity markers supports fine grained, per-transaction activity attribution to multiple beneficiary parties.
+For scalability reasons, this CIP proposes to replace per-transaction attribution of beneficiary parties with the same construction that is used to manage beneficiaries of SV rewards: as part of minting, the app provider party can specify a list of beneficiaries and the amount of CC they should receive out of the minted allowance.
 
-The `MintingDelegations` introduced in [CIP-73](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0073/cip-0073.md#daml) will support minting app reward coupons from the adjusted workflow for the app provider. Automating the specification of beneficiaries and their amounts is however out of scope for the `MintingDelegations` from [CIP-73](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0073/cip-0073.md#daml). We expect such automation to be built as part of the apps themselves.
+The `MintingDelegations` introduced in [CIP-73](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0073/cip-0073.md#daml) will support minting app reward coupons from the adjusted workflow for the app provider.
+Automating the specification of beneficiaries and their amounts is however out of scope for the `MintingDelegations` from [CIP-73](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0073/cip-0073.md#daml). We expect such automation to be built as part of the apps themselves.
 
 #### Expose Traffic Cost and Activity Records in Scan App
 
-The CIP proposes to extend the Scan API to make both the data used by the app activity record computation and the activity records themselves available. Concretely:
+The CIP proposes to extend the Scan API to make both the data used by the app activity record computation and the activity records themselves available.
+Concretely:
 
-1. Add an endpoint to the Scan API that serves a stream of summaries of the traffic spent on confirmation requests. These summaries contain the per-envelope traffic costs, the total traffic cost, and the hashes of the views contained in an envelope. The stream is served in sequencing time order.
+1. Add an endpoint to the Scan API that serves a stream of summaries of the traffic spent on confirmation requests.
+These summaries contain the per-envelope traffic costs, the total traffic cost, and the hashes of the views contained in an envelope.
+The stream is served in sequencing time order.
 2. Add an endpoint to the Scan API that serves the stream of app activity records created for successful confirmation requests.
 3. Extend the `/v2/events` endpoint so that the views in the mediator verdicts are annotated with their view hash.
 
@@ -128,23 +149,31 @@ Note that the CIP proposes introducing extra endpoints instead of extending the 
 
 ### Free Protocol-Conformant Confirmation Responses
 
-The Canton Protocol is changed so that the confirmation responses expected to be sent by a confirming participant node become de-facto free. The mechanism works as follows:
+The Canton Protocol is changed so that the confirmation responses expected to be sent by a confirming participant node become de-facto free.
+The mechanism works as follows:
 
-1. The sequencer continues to charge the traffic cost of a submission to the submitting validator node. This ensures that traffic cost continues to serve as an effective Denial-of-Service (DoS) protection measure.
+1. The sequencer continues to charge the traffic cost of a submission to the submitting validator node.
+This ensures that traffic cost continues to serve as an effective Denial-of-Service (DoS) protection measure.
 2. The mediator keeps track of the traffic cost spent by validator nodes on protocol-conformant confirmation responses, i.e., responses that match in-flight confirmation requests.
-3. The mediator regularly reimburses the validator nodes for the traffic spent on protocol-conformant confirmation responses. For scalability, the reimbursements may be batched, but they happen at most after `maxConfirmationResponseReimbursementDelay` (new Amulet config parameter; default, 1h).
+3. The mediator regularly reimburses the validator nodes for the traffic spent on protocol-conformant confirmation responses.
+For scalability, the reimbursements may be batched, but they happen at most after `maxConfirmationResponseReimbursementDelay` (new Amulet config parameter; default, 1h).
 
-Thus validator nodes no longer pay for confirmation responses during normal operations. They only need to hold enough traffic to pay for the in-flight responses that have not yet been reimbursed. In case of network errors, validator nodes retry sending confirmation responses, which may lead to extra traffic costs in case the retry resulted in a duplicate confirmation response.
+Thus validator nodes no longer pay for confirmation responses during normal operations.
+They only need to hold enough traffic to pay for the in-flight responses that have not yet been reimbursed.
+In case of network errors, validator nodes retry sending confirmation responses, which may lead to extra traffic costs in case the retry resulted in a duplicate confirmation response.
 
 #### Heuristic Implementation
 
-In Version 34 of the Canton Protocol, which is the version used on MainNet at the time of writing, the confirmation responses are the only messages that are addressed to exactly one mediator group. This CIP proposes to exploit this fact to expedite the change to make confirmation responses free as follows:
+In Version 34 of the Canton Protocol, which is the version used on MainNet at the time of writing, the confirmation responses are the only messages that are addressed to exactly one mediator group.
+This CIP proposes to exploit this fact to expedite the change to make confirmation responses free as follows:
 
 1. Add a boolean dynamic synchronizer flag to the topology state.
 2. Change the traffic accounting in sequencers such that no traffic is deducted for messages that have only a single mediator group as their recipients.
 3. Have the SV apps set the flag once all of the SV nodes have upgraded their sequencer to support the flag.
 
-The drawback of the heuristic implementation is that it opens up a DoS attack vector: a validator node could send lots of messages to mediators without paying traffic for them. The proper implementation avoids that problem. When using the heuristic implementation, the SV nodes can detect this DoS vector using the existing sequencer metrics on SV nodes, and handle abuse using IP blacklisting.
+The drawback of the heuristic implementation is that it opens up a DoS attack vector: a validator node could send lots of messages to mediators without paying traffic for them.
+The proper implementation avoids that problem.
+When using the heuristic implementation, the SV nodes can detect this DoS vector using the existing sequencer metrics on SV nodes, and handle abuse using IP blacklisting.
 
 ### Incremental Roll-Out
 
@@ -156,19 +185,27 @@ This CIP proposes to roll-out the changes in multiple increments:
 4. Switch to traffic-based app reward computation
 5. Switch to only making protocol-conformant confirmation responses free.
 
-Increments 2 and 3 serve to give the community a preview on the actual switch happening in the Increment 4\. In particular, they allow network explorers to build support for as-if analyses for app providers. The caveat being that the view structure of an app's Daml transactions will change once the app no longer creates featured app markers. App providers can use LocalNet, DevNet or TestNet to preview the impact of adjusting their Daml models.
+Increments 2 and 3 serve to give the community a preview on the actual switch happening in the Increment 4\. In particular, they allow network explorers to build support for as-if analyses for app providers.
+The caveat being that the view structure of an app's Daml transactions will change once the app no longer creates featured app markers.
+App providers can use LocalNet, DevNet or TestNet to preview the impact of adjusting their Daml models.
 
-The difference between Increment 2 and Increment 3 is that the first one allows for an approximate computation of the traffic-based app rewards in network explorers using the featured app status at the time of ingestion. Increment 3 implements the precise activity record logic described in this CIP directly in Scan, and thus ensures that all network explorers use the same data.
+The difference between Increment 2 and Increment 3 is that the first one allows for an approximate computation of the traffic-based app rewards in network explorers using the featured app status at the time of ingestion.
+Increment 3 implements the precise activity record logic described in this CIP directly in Scan, and thus ensures that all network explorers use the same data.
 
 The minimal delay between Increment 2 and Increment 4 landing on MainNet must be at least 30 days.
 
 ## Motivation
 
-The Global Synchronizer for Canton Network incentivizes app builders via an app reward denominated in Canton Coin. This reward was initially granted only to applications that transferred Canton Coin as part of their activity, but this was found to be too limiting: the Super Validators wanted to also incentivize applications that moved assets other than Canton Coin. As a result the Super Validators introduced featured application activity markers (“featured app markers”) in [CIP-47](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0047/cip-0047.md), which allowed a featured application to receive rewards for any economically meaningful activity.
+The Global Synchronizer for Canton Network incentivizes app builders via an app reward denominated in Canton Coin.
+This reward was initially granted only to applications that transferred Canton Coin as part of their activity, but this was found to be too limiting: the Super Validators wanted to also incentivize applications that moved assets other than Canton Coin.
+As a result the Super Validators introduced featured application activity markers (“featured app markers”) in [CIP-47](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0047/cip-0047.md), which allowed a featured application to receive rewards for any economically meaningful activity.
 
-This approach also had shortcomings, however: the reward weight generated was not directly correlated to the amount of traffic burned. At the time of writing, roughly 150% of weight is claimed via markers compared to actual traffic burned. The work to assess and govern these markers has become complex and time-consuming, and produces pressure to centralize governance of application behavior.
+This approach also had shortcomings, however: the reward weight generated was not directly correlated to the amount of traffic burned.
+At the time of writing, roughly 150% of weight is claimed via markers compared to actual traffic burned.
+The work to assess and govern these markers has become complex and time-consuming, and produces pressure to centralize governance of application behavior.
 
-App markers are also computationally expensive for the Super Validators, decreasing the amount of throughput that can be devoted to economically useful activity. We need a better method for incentivizing app builders that incentivizes economically useful behavior, and improves governance decentralization while decreasing the requirement for human oversight, so that applications are economically motivated to add the highest possible value in each transaction.
+App markers are also computationally expensive for the Super Validators, decreasing the amount of throughput that can be devoted to economically useful activity.
+We need a better method for incentivizing app builders that incentivizes economically useful behavior, and improves governance decentralization while decreasing the requirement for human oversight, so that applications are economically motivated to add the highest possible value in each transaction.
 
 ## Rationale
 
@@ -177,9 +214,11 @@ This CIP improves the quality of the app reward incentives using the following t
 1. Measuring the actual traffic burn contributed by an app.
 2. Enabling validator operators to charge their users for the cost of accessing the network.
 
-These two changes ensure that, in BME, the app rewards received by an app are de-facto paid by the traffic spent by the app’s users. This incentivizes apps to build workflows whose traffic costs are below the value gained by the app’s users, while at the same time encouraging those apps to have their users submit a large number of transactions.
+These two changes ensure that, in BME, the app rewards received by an app are de-facto paid by the traffic spent by the app’s users.
+This incentivizes apps to build workflows whose traffic costs are below the value gained by the app’s users, while at the same time encouraging those apps to have their users submit a large number of transactions.
 
-Furthermore, this CIP removes the need to govern the creation of app markers, by replacing them with a uniform mechanism that always records all featured app activity. Doing this uniformly using traffic-weighted app activity records ensures a level playing field among apps, and removes the need to optimize the amount of traffic spent per marker created.
+Furthermore, this CIP removes the need to govern the creation of app markers, by replacing them with a uniform mechanism that always records all featured app activity.
+Doing this uniformly using traffic-weighted app activity records ensures a level playing field among apps, and removes the need to optimize the amount of traffic spent per marker created.
 
 ### Alternatives Considered
 
@@ -187,39 +226,58 @@ Furthermore, this CIP removes the need to govern the creation of app markers, by
 
 Instead of attributing the traffic spend of each envelope to the app informees of the envelope, one could consider attributing the traffic spend of the whole confirmation request in equal shares across all informees of the whole transaction.
 
-We propose not to do so, as that would not work well with composed transactions. The goal is that app providers get the same rewards for the composed transaction as they would get if the user acted on each of the apps individually. This ensures that the users’ “vote of app value” is independent of how their use of the app came about.
+We propose not to do so, as that would not work well with composed transactions.
+The goal is that app providers get the same rewards for the composed transaction as they would get if the user acted on each of the apps individually.
+This ensures that the users’ “vote of app value” is independent of how their use of the app came about.
 
 #### Rewards for Unfeatured Apps
 
-The [Canton Coin whitepaper](https://www.digitalasset.com/hubfs/Canton%20Network%20Files/Documents%20\(whitepapers%2c%20etc...\)/Canton%20Coin_%20A%20Canton-Network-native%20payment%20application.pdf?__hstc=169870847.16854726061d8b28be85af48c17588c4.1750870506327.1750870506327.1750870506327.1&__hssc=169870847.1.1750870506328&__hsfp=1243925796&_gl=1*1fkzmuj*_gcl_au*MTkyOTE1NjAyNC4xNzUwODcwNTA2*_ga*NDU1NzM2NzgyLjE3NTA4NzA1MDY.*_ga_GVK9ZHZSMR*czE3NTA4NzA1MDUkbzEkZzAkdDE3NTA4NzA1MDUkajYwJGwwJGgw) supports both unfeatured and featured applications. The difference between them being the amount of rewards they are allowed to earn per dollar of fees spent by their users. The mechanisms introduced by this CIP are compatible with supporting both featured and unfeatured applications *provided* there is a scalable means to identify app provider parties ahead of activity record creation.
+The [Canton Coin whitepaper](https://www.digitalasset.com/hubfs/Canton%20Network%20Files/Documents%20\(whitepapers%2c%20etc...\)/Canton%20Coin_%20A%20Canton-Network-native%20payment%20application.pdf?__hstc=169870847.16854726061d8b28be85af48c17588c4.1750870506327.1750870506327.1750870506327.1&__hssc=169870847.1.1750870506328&__hsfp=1243925796&_gl=1*1fkzmuj*_gcl_au*MTkyOTE1NjAyNC4xNzUwODcwNTA2*_ga*NDU1NzM2NzgyLjE3NTA4NzA1MDY.*_ga_GVK9ZHZSMR*czE3NTA4NzA1MDUkbzEkZzAkdDE3NTA4NzA1MDUkajYwJGwwJGgw) supports both unfeatured and featured applications.
+The difference between them being the amount of rewards they are allowed to earn per dollar of fees spent by their users.
+The mechanisms introduced by this CIP are compatible with supporting both featured and unfeatured applications *provided* there is a scalable means to identify app provider parties ahead of activity record creation.
 
-Thus what is missing to support unfeatured applications is the design and implementation for identifying unfeatured apps. A strawman candidate is to compute the set of unfeatured app providers daily, and require that an unfeatured app provider was involved in sub-transactions costing more than a threshold amount of traffic on the previous day. Designing and implementing a scalable implementation of this idea would however significantly delay the delivery of this CIP, which is why it is not included. However adding support for rewarding unfeatured apps in a future CIP is very much in line with the spirit of this CIP.
+Thus what is missing to support unfeatured applications is the design and implementation for identifying unfeatured apps.
+A strawman candidate is to compute the set of unfeatured app providers daily, and require that an unfeatured app provider was involved in sub-transactions costing more than a threshold amount of traffic on the previous day.
+Designing and implementing a scalable implementation of this idea would however significantly delay the delivery of this CIP, which is why it is not included.
+However adding support for rewarding unfeatured apps in a future CIP is very much in line with the spirit of this CIP.
 
 #### Per-Transaction Beneficiaries Defined by App Provider
 
 One additional proposal for app rewards is to allow an app provider to specify per-transaction weights for how to split the app’s activity record among a set of beneficiaries, who would then ultimately be able tomint Canton Coin rewards for this activity.
 
-The current proposal does not address this feature. The main motivation for not supporting per-transaction beneficiaries is to avoid scalability issues. In particular the following two issues seem important to avoid:
+The current proposal does not address this feature.
+The main motivation for not supporting per-transaction beneficiaries is to avoid scalability issues.
+In particular the following two issues seem important to avoid:
 
 1. **Avoid tracking minting allowances for millions of parties at the DSO level:** unnetted, direct reward sharing with app users would encourage apps to share rewards in fine-grained increments, which in turn creates unwanted scalability pressure on the SV app’s implementation of the minting allowance accounting that must run for every round.
 
-2. **Avoid involving the DSO party in most transactions:** transactions involving the DSO party are validated and confirmed by all SV validator nodes. They thus carry a high cost, and should be used sparingly.
+2. **Avoid involving the DSO party in most transactions:** transactions involving the DSO party are validated and confirmed by all SV validator nodes.
+They thus carry a high cost, and should be used sparingly.
 
-   Supporting per-transaction beneficiaries would require communicating information about different sub-transactions to the SV nodes at scale at the Daml-level. Thus creating a scalability issue by making the DSO party a confirmer of almost every transaction on the Global Synchronizer.
+   Supporting per-transaction beneficiaries would require communicating information about different sub-transactions to the SV nodes at scale at the Daml-level.
+Thus creating a scalability issue by making the DSO party a confirmer of almost every transaction on the Global Synchronizer.
 
-App providers are however free to perform their own accounting to determine how to split the rewards they receive among their beneficiaries. They can retrieve the [necessary data from Scan](#expose-traffic-cost-and-activity-records-in-scan-app) and they can communicate the [the minting allowances of their beneficiaries to the DSO on-ledger](#beneficiary-party-support). They may either perform the accounting themselves or use a third-party data provider that performs the accounting on their behalf.
+App providers are however free to perform their own accounting to determine how to split the rewards they receive among their beneficiaries.
+They can retrieve the [necessary data from Scan](#expose-traffic-cost-and-activity-records-in-scan-app) and they can communicate the [the minting allowances of their beneficiaries to the DSO on-ledger](#beneficiary-party-support). They may either perform the accounting themselves or use a third-party data provider that performs the accounting on their behalf.
 
 #### Weighting Beneficiaries Via Daml Model
 
-A given transaction might compose activity from multiple applications. In some cases, a given app provider could argue that their application provides a larger fraction of the overall value generated by that transaction, and therefore their application should receive a larger share of the total rewards generated by that transaction, even if the provider party for that application is not included in a comparable portion of the sub-transactions within the overall transaction. In this conceptual approach, the Daml model defining the app’s behavior would also dictate the weighting to be assigned to that app’s participation in any composed transaction involving that Daml model.
+A given transaction might compose activity from multiple applications.
+In some cases, a given app provider could argue that their application provides a larger fraction of the overall value generated by that transaction, and therefore their application should receive a larger share of the total rewards generated by that transaction, even if the provider party for that application is not included in a comparable portion of the sub-transactions within the overall transaction.
+In this conceptual approach, the Daml model defining the app’s behavior would also dictate the weighting to be assigned to that app’s participation in any composed transaction involving that Daml model.
 
-However due to Canton’s privacy, there is no way for the sequencer and mediator to know which Daml models are used in which (sub-)transactions, so value splits defined in a Daml model and cannot be evaluated by the DSO. It *may* be possible to control the split of rewards *within a given sub-transaction*, but that would introduce significant complexity to the scope of this proposal.
+However due to Canton’s privacy, there is no way for the sequencer and mediator to know which Daml models are used in which (sub-)transactions, so value splits defined in a Daml model and cannot be evaluated by the DSO.
+It *may* be possible to control the split of rewards *within a given sub-transaction*, but that would introduce significant complexity to the scope of this proposal.
 
-As a result, this CIP does not address weighting beneficiaries via Daml models, due to the significant increase in complexity this would introduce. We leave it to the community to consider this as a future enhancement.
+As a result, this CIP does not address weighting beneficiaries via Daml models, due to the significant increase in complexity this would introduce.
+We leave it to the community to consider this as a future enhancement.
 
 #### Load-Smoothing Round Attribution
 
-The certainty about the app rewards gained on traffic spent changes over the duration of a round. It is lowest at its start and highest towards the end of the round. Thus one can expect that rounds with low traffic will see a peak of transactions from elastic demand towards the end of the round. The exact height of these peaks is unclear.
+The certainty about the app rewards gained on traffic spent changes over the duration of a round.
+It is lowest at its start and highest towards the end of the round.
+Thus one can expect that rounds with low traffic will see a peak of transactions from elastic demand towards the end of the round.
+The exact height of these peaks is unclear.
 
 If these load peaks become a problem, then a future CIP can propose adopting an idea like the following deterministically randomized round assignment to smoothen them:
 
@@ -227,7 +285,8 @@ If these load peaks become a problem, then a future CIP can propose adopting an 
 2. Every activity record is assigned to one of the candidate rounds in a deterministically randomized fashion using the hash of their record time.
 3. The probability of the assignment to the later round is managed such that it linearly increases from zero at the round start time to one at the round end time of the prior round.
 
-Thus the later an activity is recorded in a round the more likely it is for that activity to be attributed to the next round, for which the expected reward is more uncertain. Thereby lowering the fluctuation of reward certainty over the duration of a round, which in turn lowers the peaks from elastic demand.
+Thus the later an activity is recorded in a round the more likely it is for that activity to be attributed to the next round, for which the expected reward is more uncertain.
+Thereby lowering the fluctuation of reward certainty over the duration of a round, which in turn lowers the peaks from elastic demand.
 
 ### Technical Background
 
@@ -245,7 +304,8 @@ The diagram shows the witnesses of an action in purple, and the informees of the
 
 As explained in the [Canton docs here](https://docs.digitalasset.com/operate/3.4/howtos/optimize/performance.html#reduce-the-number-of-views), Canton 3.4 creates a view for every action node in the transaction tree if the validator nodes that host their informees are not a subset of their parent view’s informee validators.
 
-Assuming that all parties in the example are hosted on their own validator nodes, the example DvP transaction results in five views, which are each encoded in their own envelope. For efficiency, envelopes only encode the root node of the view, as the subtree below the root node can be recomputed using its associated Daml code.
+Assuming that all parties in the example are hosted on their own validator nodes, the example DvP transaction results in five views, which are each encoded in their own envelope.
+For efficiency, envelopes only encode the root node of the view, as the subtree below the root node can be recomputed using its associated Daml code.
 
 Below we show three calculation examples to illustrate the [activity record computation](#activity-record-computation-details). The all assume the following envelope sizes for the envelopes containing the node’s views:
 
@@ -256,7 +316,8 @@ Below we show three calculation examples to illustrate the [activity record comp
 * Node 5: 2 kB
 * `total_confirmation_request_traffic`: 25 kB
 
-Note that we set `total_confirmation_request_traffic` to the sum of all envelopes for the sake of this example. In practice, a confirmation request always contains two envelopes without associated views (one for the mediator view tree, and one or the root view hashes).
+Note that we set `total_confirmation_request_traffic` to the sum of all envelopes for the sake of this example.
+In practice, a confirmation request always contains two envelopes without associated views (one for the mediator view tree, and one or the root view hashes).
 
 #### Calculation Example 1: Bank1 is the only app provider
 
@@ -268,7 +329,8 @@ Note that Bank1 is an informee of Node 2 and 3\. Thus
 * Bank1 gets the following `per_app_traffic_weight` for Node 3:
   `per_app_traffic_weight = (2 * 25) / (6 * 1) = 8.333 kB`
 
-Thus Bank1 total activity record for this confirmation request is `24.999 kB`, which is equal to total confirmation request traffic of 25 kB when ignoring rounding errors. No other party gets credit for the traffic spent on this confirmation request.
+Thus Bank1 total activity record for this confirmation request is `24.999 kB`, which is equal to total confirmation request traffic of 25 kB when ignoring rounding errors.
+No other party gets credit for the traffic spent on this confirmation request.
 
 #### Calculation Example 2: Bank1 and Bank2 are app providers
 
@@ -286,7 +348,8 @@ Note that Bank1 is an informee of Node 2 and 3; and Bank2 is an informee of Node
 
 Thus Bank1’s total activity record for this confirmation request is `11.538 kB` and Bank2’s total is `13.461 kB`. They sum up to 24.999 kB, and their ratio is `13.461 / 11.538 = 1.166`, which matches the ratio of the size of their envelopes `7 / 6`.
 
-Note that both Bank1 and Bank2 still got full attribution for the envelopes involving only themselves. The difference to the first example is that Bank1 no longer gets any extra credit for the traffic spent by their users on the envelopes for nodes 1, 4, and 5\.
+Note that both Bank1 and Bank2 still got full attribution for the envelopes involving only themselves.
+The difference to the first example is that Bank1 no longer gets any extra credit for the traffic spent by their users on the envelopes for nodes 1, 4, and 5\.
 
 #### Calculation Example 3: Alice, Bank1, and Bank2 are app providers
 
@@ -317,9 +380,12 @@ Thus the totals are as follows:
 
 Note that the actual view decomposition of an app very much depends on their Daml models, and is best observed in production.
 
-For example the `SimpleAsset` contract used in this example does not make the `owner` a signatory. If the `owner` were a signatory, then the new owner would be an informee on the `Transfer` choice, and thus a corresponding DvP settlement transaction would only contain three views: one for the settlement choice, and one for each transfer.
+For example the `SimpleAsset` contract used in this example does not make the `owner` a signatory.
+If the `owner` were a signatory, then the new owner would be an informee on the `Transfer` choice, and thus a corresponding DvP settlement transaction would only contain three views: one for the settlement choice, and one for each transfer.
 
-For this reason, this CIP proposes an [Incremental Roll-Out](#incremental-roll-out), whose first increment makes the view decomposition and traffic costs observable on Scan. Using a [LocalNet deployment](https://docs.dev.sync.global/app_dev/testing/localnet.html) of this increment, app providers may experiment with their Daml models and observe the view decomposition and envelope sizes. They can also use Daml Studio to observe the full transaction trees from their Daml models, which can be used with enough experience to predict the view decomposition.
+For this reason, this CIP proposes an [Incremental Roll-Out](#incremental-roll-out), whose first increment makes the view decomposition and traffic costs observable on Scan.
+Using a [LocalNet deployment](https://docs.dev.sync.global/app_dev/testing/localnet.html) of this increment, app providers may experiment with their Daml models and observe the view decomposition and envelope sizes.
+They can also use Daml Studio to observe the full transaction trees from their Daml models, which can be used with enough experience to predict the view decomposition.
 
 ## Reference Implementation
 
