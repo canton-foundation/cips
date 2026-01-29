@@ -96,4 +96,5 @@ Global Synchronizer CIPs
 | [cip-0099](/cip-0099/cip-0099.md) |  | Zero Hash Modifications to Adoption Incentive  | Eric Saraniecki | Governance | Approved |
 | [cip-0100](/cip-0100/cip-0100.md) |  | Governance of the CIP-0082 Development Fund  | Bernhard Elsner | Governance | Approved |
 | [cip-0102](/cip-0102/cip-0102.md) |  | Add Tharimmune as a SV of weight 4  | Mark Wendland  | Governance | Approved |
+| [cip-0103](/cip-0103/cip-0103.md) |  | dApp Standard| Marc Juchli, Alexey Chyker, Eugene Birski| Standards Track | Approved |
 
