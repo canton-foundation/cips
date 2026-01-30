@@ -68,6 +68,8 @@ its creation.
 - Add new `LockedAmulet_ExpireAmuletV2` and `Amulet_Expire` choices that require `ExternalPartyConfigState` instead of `OpenMiningRound`.
 - Remove the existing `LockedAmulet_ExpireAmulet` and `Amulet_Expire` choices.
 - Update CIP-0056 to remove the ["Canton Coin Limitations" section in CIP-0056](https://github.com/global-synchronizer-foundation/cips/blob/main/cip-0056/cip-0056.md#canton-coin-limitations) once the change from this CIP lands on MainNet
+- The `scan_txlog.py` script will be removed in favor of documentation on how to parse the Scan update API as updating it to these changes
+  would have significant cost and it hasn't kept up with the scale requirements of mainnet for a while.
 
 ## Motivation
 
