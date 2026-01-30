@@ -67,13 +67,15 @@ Use the view hashes visible to the sequencer on the confirmation request to dete
     / (total_app_envelopes_traffic * num_app_informees)
    ```
 
-   and attribute `per_app_traffic_weight` to every app informee of the envelope.
+   using integer arithmetic, and attribute `per_app_traffic_weight` to every app informee of the envelope.
 
 Note that the computation in Item 5 takes care of distributing the traffic cost not attributed to app envelopes in a weighted fashion among the app envelopes.
 When all envelopes have an app informee, it becomes `per_app_traffic_weight = envelope_traffic_cost / num_app_informees`, as expected.
+See the [Example: Views and Envelopes for DvP settlement](#example-views-and-envelopes-for-dvp-settlement) section for concrete calculation examples.
 
-All computations are performed using integer arithmetic.
+The computations are performed using integer arithmetic for efficiency and determinism reasons.
 For confirmation requests whose traffic size is below 100 MB, they can be performed with 64-bit signed integers without risk of overflow.
+
 
 #### Adjust App Reward Accounting
 
