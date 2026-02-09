@@ -32,7 +32,10 @@ Concretely it proposes to avoid using the `DSO` party in app transactions for th
 
 #### Record Activity Based on Sequencer and Mediator Data
 
-Change the app activity recording such that the traffic cost of each envelope of a *successful* confirmation request is granted in equal shares as app reward weight for all app provider parties that are informees of the views contained in the envelope.
+Note that the confirmers of a view are the parties whose validator nodes must validate the view and
+send a successful confirmation response for the (sub-)transaction contained in the view to be committed.
+This CIP proposes to
+change the app activity recording such that the traffic cost of each envelope of a *successful* confirmation request is granted in equal shares as app reward weight for all app provider parties that are confirmers of the views contained in the envelope.
 The app provider parties are computed deterministically by reading `FeaturedAppRight`s as-of the time that the mining round opens.
 
 These records are ingested by the SV app based on the mediator verdicts from the mediator scan API, and from the sequencer using a new sequencer traffic scan API.
@@ -54,23 +57,23 @@ The activity record computation is structured such that for a confirmation reque
 For confirmation requests involving multiple apps, the computation shares the credit in equal amounts per envelope.
 This is done as follows:
 
-1. Compute the informees of an envelope as the union of the informees of the views in that envelope.
+1. Compute the confirmers of an envelope as the union of the confirmers of the views in that envelope.
 Use the view hashes visible to the sequencer on the confirmation request to determine the views contained in the envelope.
-2. Determine the app informees as the parties for which a `FeaturedAppRight` is active at round start time.
-3. Determine `total_app_envelopes_traffic` as the total amount of traffic of envelopes that have at least one app informee.
+2. Determine the app confirmers as the parties for which a `FeaturedAppRight` is active at round start time.
+3. Determine `total_app_envelopes_traffic` as the total amount of traffic of envelopes that have at least one app confirmer.
 4. Let `total_confirmation_request_traffic` denote the total traffic cost of the confirmation request.
-5. For every envelope with `num_app_informees > 0`, compute
+5. For every envelope with `num_app_confirmers > 0`, compute
 
    ```
    per_app_traffic_weight =
     (envelope_traffic_cost * total_confirmation_request_traffic)
-    / (total_app_envelopes_traffic * num_app_informees)
+    / (total_app_envelopes_traffic * num_app_confirmers)
    ```
 
-   using integer arithmetic, and attribute `per_app_traffic_weight` to every app informee of the envelope.
+   using integer arithmetic, and attribute `per_app_traffic_weight` to every app confirmer of the envelope.
 
 Note that the computation in Item 5 takes care of distributing the traffic cost not attributed to app envelopes in a weighted fashion among the app envelopes.
-When all envelopes have an app informee, it becomes `per_app_traffic_weight = envelope_traffic_cost / num_app_informees`, as expected.
+When all envelopes have an app confirmer, it becomes `per_app_traffic_weight = envelope_traffic_cost / num_app_confirmers`, as expected.
 See the [Example: Views and Envelopes for DvP settlement](#example-views-and-envelopes-for-dvp-settlement) section for concrete calculation examples.
 
 The computations are performed using integer arithmetic for efficiency and determinism reasons.
@@ -224,9 +227,28 @@ Doing this uniformly using traffic-weighted app activity records ensures a level
 
 ### Alternatives Considered
 
+#### Distribute app activity weights among the app informees
+
+This CIP proposes to distribute app activity weights only among the confirming app providers of a view
+instead of sharing them among all featured app providers that are informees of the view.
+Practically, the main difference is that only the signatories of a contract creation node
+and the actors of an exercise node receive app rewards.
+Parties that are only contract observers or choice observers do not receive app rewards.
+
+The rationale for this is two-fold:
+
+1. The confirming app providers are the ones that actively participate in the validation and thus
+   increase the integrity of the network.
+2. Not considering contract observers and choice observers allows more flexibility for apps
+   to optimize their Daml workflows without impacting their app rewards.
+   For example, the ability to add extra choice observers is important to
+   [avoid creating one view per item in a batch of actions](https://docs.digitalasset.com/operate/3.4/howtos/optimize/performance.html#reduce-the-number-of-views),
+   and thus reduce traffic cost.
+
+
 #### Ignore Envelope Structure for Activity Recording
 
-Instead of attributing the traffic spend of each envelope to the app informees of the envelope, one could consider attributing the traffic spend of the whole confirmation request in equal shares across all informees of the whole transaction.
+Instead of attributing the traffic spend of each envelope to the app confirmers of the envelope, one could consider attributing the traffic spend of the whole confirmation request in equal shares across all confirmers of the whole transaction.
 
 We propose not to do so, as that would not work well with composed transactions.
 The goal is that app providers get the same rewards for the composed transaction as they would get if the user acted on each of the apps individually.
@@ -300,11 +322,11 @@ Canton protocol messages are distributed via the sequencer as a batch of envelop
 
 We use the DvP example from the [Canton ledger model documentation on privacy](https://docs.digitalasset.com/overview/3.4/explanations/ledger-model/ledger-privacy.html#witness). See that documentation for diagram notation, context on the example, and formal definitions of concepts like action, transaction, node, informees, and witnesses.
 
-![Example of a DvP settlement transaction](dvp-settle-witness.svg)
+![Example of a DvP settlement transaction](settlement_tx_example.png)
 
-The diagram shows the witnesses of an action in purple, and the informees of the action in blue.
+The diagram shows the confirmers of an action in green.
 
-As explained in the [Canton docs here](https://docs.digitalasset.com/operate/3.4/howtos/optimize/performance.html#reduce-the-number-of-views), Canton 3.4 creates a view for every action node in the transaction tree if the validator nodes that host their informees are not a subset of their parent view’s informee validators.
+As explained in the [Canton docs here](https://docs.digitalasset.com/operate/3.4/howtos/optimize/performance.html#reduce-the-number-of-views), Canton 3.4 creates a view for every action node in the transaction tree if the validator nodes that host their informees are not a subset of their parent view’s informees' validators.
 
 Assuming that all parties in the example are hosted on their own validator nodes, the example DvP transaction results in five views, which are each encoded in their own envelope.
 For efficiency, envelopes only encode the root node of the view, as the subtree below the root node can be recomputed using its associated Daml code.
@@ -323,7 +345,7 @@ In practice, a confirmation request always contains two envelopes without associ
 
 #### Calculation Example 1: Bank1 is the only app provider
 
-Note that Bank1 is an informee of Node 2 and 3\. Thus
+Note that Bank1 is an confirmer of Node 2 and 3\. Thus
 
 * `total_app_envelopes_traffic` \= 6 kB
 * Bank1 gets the following `per_app_traffic_weight` for Node 2:
@@ -336,7 +358,7 @@ No other party gets credit for the traffic spent on this confirmation request.
 
 #### Calculation Example 2: Bank1 and Bank2 are app providers
 
-Note that Bank1 is an informee of Node 2 and 3; and Bank2 is an informee of Node 4 and 5\. Thus
+Note that Bank1 is an confirmer of Node 2 and 3; and Bank2 is an confirmer of Node 4 and 5\. Thus
 
 * `total_app_envelopes_traffic` \= 13 kB
 * Bank1 gets the following `per_app_traffic_weight` for Node 2:
@@ -357,7 +379,7 @@ The difference to the first example is that Bank1 no longer gets any extra credi
 
 Intuition: Alice is a featured app because they act as an automated market maker.
 
-Note that Bank1 is an informee of Node 2 and 3; Bank2 is an informee of Node 4 and 5; and Alice is an informer of nodes 1, 2, and 5\. Thus
+Note that Bank1 is an confirmer of Node 2 and 3; Bank2 is an confirmer of Node 4 and 5; and Alice is an confirmer of Node 1 and 2\. Thus
 
 * `total_app_envelopes_traffic` \= 25 kB
 * Alice gets the following `per_app_traffic_weight` for Node 1:
@@ -368,22 +390,22 @@ Note that Bank1 is an informee of Node 2 and 3; Bank2 is an informee of Node 4 a
 * Bank1 gets the following `per_app_traffic_weight` for Node 3:
   `per_app_traffic_weight = (2 * 25) / (25 * 1) = 2 kB`
 * Bank2 gets the following `per_app_traffic_weight` for Node 4:
-  `per_app_traffic_weight = (5 * 25) / (13 * 1) = 5 kB`
-* Bank2 and Alice each get the following `per_app_traffic_weight` for Node 5:
-  `per_app_traffic_weight = (2 * 25) / (15 * 1) = 1 kB`
+  `per_app_traffic_weight = (5 * 25) / (25 * 1) = 5 kB`
+* Bank2 gets the following `per_app_traffic_weight` for Node 5:
+  `per_app_traffic_weight = (2 * 25) / (25 * 1) = 2 kB`
 
 Thus the totals are as follows:
 
-* Alice: 15 kB
+* Alice: 14 kB
 * Bank1: 4 kB
-* Bank2: 6 kB
+* Bank2: 7 kB
 
 #### Observing and Optimizing View Decompositions
 
 Note that the actual view decomposition of an app very much depends on their Daml models, and is best observed in production.
 
 For example the `SimpleAsset` contract used in this example does not make the `owner` a signatory.
-If the `owner` were a signatory, then the new owner would be an informee on the `Transfer` choice, and thus a corresponding DvP settlement transaction would only contain three views: one for the settlement choice, and one for each transfer.
+If the `owner` were a signatory, then the new owner would be an confirmer on the `Transfer` choice, and thus a corresponding DvP settlement transaction would only contain three views: one for the settlement choice, and one for each transfer.
 
 For this reason, this CIP proposes an [Incremental Roll-Out](#incremental-roll-out), whose first increment makes the view decomposition and traffic costs observable on Scan.
 Using a [LocalNet deployment](https://docs.dev.sync.global/app_dev/testing/localnet.html) of this increment, app providers may experiment with their Daml models and observe the view decomposition and envelope sizes.
