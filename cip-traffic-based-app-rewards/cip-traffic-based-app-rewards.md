@@ -33,9 +33,10 @@ Concretely it proposes to avoid using the `DSO` party in app transactions for th
 #### Record Activity Based on Sequencer and Mediator Data
 
 Note that the confirmers of a view are the parties whose validator nodes must validate the view and
-send a successful confirmation response for the (sub-)transaction contained in the view to be committed.
+send a positive confirmation response for the (sub-)transaction contained in the view to be committed.
+
 This CIP proposes to
-change the app activity recording such that the traffic cost of each envelope of a *successful* confirmation request is granted in equal shares as app reward weight for all app provider parties that are confirmers of the views contained in the envelope.
+change the app activity recording such that the traffic cost of a successful confirmation request is granted to the app provider parties proportional to the envelope sizes of the envelopes on which they appear as confirmers.
 The app provider parties are computed deterministically by reading `FeaturedAppRight`s as-of the time that the mining round opens.
 
 These records are ingested by the SV app based on the mediator verdicts from the mediator scan API, and from the sequencer using a new sequencer traffic scan API.
