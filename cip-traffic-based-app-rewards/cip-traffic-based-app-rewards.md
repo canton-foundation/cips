@@ -233,7 +233,7 @@ Doing this uniformly using traffic-weighted app activity records ensures a level
 This CIP proposes to distribute app activity weights only among the confirming app providers of a view
 instead of sharing them among all featured app providers that are informees of the view.
 Practically, the main difference is that only the signatories of a contract creation node
-and the actors of an exercise node receive app rewards.
+and the input contract signatories and actors of an exercise node receive app rewards.
 Parties that are only contract observers or choice observers do not receive app rewards.
 
 The rationale for this is two-fold:
