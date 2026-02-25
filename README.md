@@ -98,4 +98,5 @@ Global Synchronizer CIPs
 | [cip-0102](/cip-0102/cip-0102.md) |  | Add Tharimmune as a SV of weight 4  | Mark Wendland  | Governance | Approved |
 | [cip-0103](/cip-0103/cip-0103.md) |  | dApp Standard| Marc Juchli, Alexey Chyker, Eugene Birski| Standards Track | Approved |
 | [cip-0104](/cip-0104/cip-0104.md) |  | Traffic-Based App Rewards | Simon Meier | Tokenomics | Approved|
+| [cip-0105](/cip-0105/cip-0105.md) |  |Super Validator (SV) Locking & Long-Term Commitment Framework | Eric Saraniecki w/ Community Proposal| Tokenomics | Proposed|
 
