@@ -73,9 +73,9 @@ No backward compatibility impact.
 
 ### Milestone B1: CIP & Verification Architecture
 
-- **Estimated Delivery:** 6 weeks from grant start (can begin in parallel with companion grant's Milestone A2)
-- **Focus:** Standards design, trust model specification, CIP submission
-- **Deliverables / Value Metrics:**
+- Estimated Delivery: 6 weeks from grant start (can begin in parallel with companion grant's Milestone A2)
+- Focus: Standards design, trust model specification, CIP submission
+- Deliverables / Value Metrics:
   - Draft CIP-YYYY (Party Identity Verification) submitted to `canton-foundation/cips`
   - Trust tier model specification (T1–T4 classification rules, weight ranges, governance requirements)
   - Verification policy schema (JSON format, reference policies)
@@ -83,13 +83,13 @@ No backward compatibility impact.
   - Encrypted field cryptographic specification (ML-KEM-768 + AES-256-GCM + HKDF-SHA256)
   - Daml contract templates: `ResolverFeaturedStatus`, `CollisionArbitration` (draft)
   - Working Group presentation and feedback incorporation
-  - **Exit criterion:** CIP-YYYY accepted to "Proposed" status by the Working Group
+  - Exit criterion: CIP-YYYY accepted to "Proposed" status by the Working Group
 
 ### Milestone B2: Verification Implementation
 
-- **Estimated Delivery:** 14 weeks from B1 completion (begins after companion grant's A2 delivers resolver infrastructure)
-- **Focus:** Trust evaluator, verification flows, encrypted fields, Scan integration
-- **Deliverables / Value Metrics:**
+- Estimated Delivery: 14 weeks from B1 completion (begins after companion grant's A2 delivers resolver infrastructure)
+- Focus: Trust evaluator, verification flows, encrypted fields, Scan integration
+- Deliverables / Value Metrics:
   - `cprp-trust` module (trust evaluator, issuer tier classifier, verification policy engine)
   - `cprp-resolver-vlei` plugin (vLEI resolver with GLEIF API client, legal name matching, QVI validation, periodic re-verification)
   - `cprp-crypto` module (ML-KEM-768 KEM, AES-256-GCM, HKDF-SHA256, key management)
@@ -100,13 +100,13 @@ No backward compatibility impact.
   - Network discriminator enforcement (cross-network rejection rules)
   - Explorer demo — Scan showing verified names, trust paths, and profiles
   - Privacy review — query privacy audit, encrypted field security review, threat model documentation
-  - **Exit criterion:** E2E demo where an app resolves a name to a verified party (T1 DNS + T2 vLEI) and executes a Canton transaction using the resolved identity; Scan displays verified name + profile; encrypted field round-trip demonstrated
+  - Exit criterion: E2E demo where an app resolves a name to a verified party (T1 DNS + T2 vLEI) and executes a Canton transaction using the resolved identity; Scan displays verified name + profile; encrypted field round-trip demonstrated
 
 ### Milestone B3: Verification SDK & Ecosystem Adoption
 
-- **Estimated Delivery:** 8 weeks from B2 completion
-- **Focus:** SDK extensions, documentation, and initial adoption of verification features
-- **Deliverables / Value Metrics:**
+- Estimated Delivery: 8 weeks from B2 completion
+- Focus: SDK extensions, documentation, and initial adoption of verification features
+- Deliverables / Value Metrics:
   - Verification extensions to all 3 SDKs (TypeScript, Python, Java): trust evaluator API, encrypted field manager API, credential verifier API
   - `cprp-keygen` tool (ML-KEM-768 key pair generation and secure storage)
   - Reference custody app demonstrating resolution + encrypted field exchange between counterparties
@@ -114,7 +114,7 @@ No backward compatibility impact.
   - Operational playbook for resolver operators (deployment, monitoring, failure modes)
   - Verification-specific integration guide (trust policies, encrypted fields, vLEI setup)
   - Adoption support: office hours, WG presentations, early adopter onboarding
-  - **Exit criterion:** 1+ Canton ecosystem app integrated verification SDK extensions in testnet or staging
+  - Exit criterion: 1+ Canton ecosystem app integrated verification SDK extensions in testnet or staging
 
 ## Acceptance Criteria
 
