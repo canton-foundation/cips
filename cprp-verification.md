@@ -1,4 +1,4 @@
-## Canton Party Resolution Protocol (CPRP) - Verification
+## Canton Party Resolution Protocol (CPRP) - Party Identity Verification
 
 Author: Paolo Domenighetti, CTO, Freename AG
 
