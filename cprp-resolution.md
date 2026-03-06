@@ -1,4 +1,4 @@
-## Canton Party Resolution Protocol (CPRP) - Resolution
+## Canton Party Resolution Protocol (CPRP) - Party Identity Resolution
 
 Author: Paolo Domenighetti, CTO, Freename AG
 
