@@ -26,7 +26,7 @@ CIP-XXXX (Party Name Resolution, companion grant) solves the mechanical problem 
 
 Intended outcome: a standardized trust evaluation framework and SDK that Canton applications use to determine whether a resolved party identity is VERIFIED, PARTIAL, or UNVERIFIED — enabling the removal of the `.unverified` prefix when identity is confirmed by credible sources.
 
-### 2. Implementation Mechanics
+### 2. Implementation
 
 The implementation delivers the following components:
 
@@ -50,7 +50,7 @@ Scan Integration: three-layer display model with verification badges, trust path
 
 Revocation Semantics: credential expiry (immediate, client-side), issuer revocation (≤60 seconds via changelog), featured status revocation (≤60 seconds), DNS record removal (≤7 days re-verification cycle).
 
-### 3. Architectural Alignment
+### 3. Architecture
 
 - Answers the WG's central question: "How do we remove the .unverified prefix?"
 - Four-tier model maps to Canton's existing governance layers: SV consensus (T1), external regulation (T2), SV-approved participants (T3), permissionless (T4)
