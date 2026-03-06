@@ -1,9 +1,13 @@
 ## Canton Party Resolution Protocol (CPRP) - Resolution
 
 Author: Paolo Domenighetti, CTO, Freename AG
+
 CIP: CIP-XXXX
+
 Status: Draft
+
 Created: 2026-03-02
+
 Contact: paolo@freename.io - gherardo@freename.io
 
 ## Abstract
