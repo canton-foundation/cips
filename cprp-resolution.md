@@ -26,7 +26,7 @@ Canton participants are identified by cryptographic Party IDs — opaque strings
 
 Intended outcome: a standardized, open-source resolution service and SDK that any Canton application can embed to resolve human-readable names to Canton Party IDs, replacing opaque identifiers and `.unverified.cns` names across all user interfaces.
 
-### 2. Implementation Mechanics
+### 2. Implementation
 
 The implementation delivers the following components:
 
@@ -46,7 +46,7 @@ Daml Contracts: `PartyNameRegistration` (binds name to Party ID) and `NameDelega
 
 Three-Layer Display Model: standardized party rendering — inline badge (L1), hover profile card (L2), full Scan profile page (L3). Profile claims (`cns-2.0/name`, `cns-2.0/avatar`, `cns-2.0/email`, `cns-2.0/website`) are informational only and must not be interpreted as verified identity attributes — verification status is determined exclusively by CIP-YYYY's trust evaluator. Social contact claims use the extensible `cprp/social:<platform>` convention (e.g., `cprp/social:telegram`, `cprp/social:x`, `cprp/social:github`, `cprp/social:discord`).
 
-### 3. Architectural Alignment
+### 3. Architecture
 
 - Follows the `<resolver>:<namespace>:<n>` addressing pattern proposed by Simon Meier in the Identity and Metadata Working Group
 - Implements the "apps decide resolution strategy" principle — no foundation-mandated resolution policy
@@ -58,7 +58,7 @@ Three-Layer Display Model: standardized party rendering — inline badge (L1), h
 
 ### 4. Backward Compatibility
 
-CPRP is fully additive with zero breaking changes:
+CPRP is additive with no breaking changes:
 
 - CNS 1.0 names continue unchanged; `cns-v1` resolver plugin wraps `DsoAnsResolver` as a CPRP-compatible resolver
 - CN Credentials interface used as-is; new claim keys (`cprp/*`) are additive
