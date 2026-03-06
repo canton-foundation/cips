@@ -70,9 +70,9 @@ CPRP is fully additive with zero breaking changes:
 
 ### Milestone A1: CIP & Resolution Architecture
 
-- **Estimated Delivery:** 6 weeks from grant start
-- **Focus:** Standards design, Working Group alignment, CIP submission
-- **Deliverables / Value Metrics:**
+- Estimated Delivery: 6 weeks from grant start
+- Focus: Standards design, Working Group alignment, CIP submission
+- Deliverables / Value Metrics:
   - Draft CIP-XXXX (Party Name Resolution) submitted to `canton-foundation/cips`
   - FQPN specification with network discrimination
   - Resolver Interface definition (JSON schema, error codes)
@@ -80,13 +80,13 @@ CPRP is fully additive with zero breaking changes:
   - Daml contract templates: `PartyNameRegistration`, `NameDelegation` (draft)
   - Address book integration and collision management specifications
   - Working Group presentation and feedback incorporation
-  - **Exit criterion:** CIP-XXXX accepted to "Proposed" status by the Working Group
+  - Exit criterion: CIP-XXXX accepted to "Proposed" status by the Working Group
 
 ### Milestone A2: Resolver Prototype on TestNet
 
-- **Estimated Delivery:** 14 weeks from A1 completion
-- **Focus:** Working software on TestNet with real resolution queries
-- **Deliverables / Value Metrics:**
+- Estimated Delivery: 14 weeks from A1 completion
+- Focus: Working software on TestNet with real resolution queries
+- Deliverables / Value Metrics:
   - `cprp-core` package (types, FQPN parser, network discriminator)
   - `cprp-resolver-api` package (plugin interface, error codes, JSON schemas)
   - `cprp-resolver-dns` plugin (DNS resolver with DNSSEC validation)
@@ -99,13 +99,13 @@ CPRP is fully additive with zero breaking changes:
   - `cprp-daml` contracts deployed to TestNet
   - Performance benchmarks (latency, throughput)
   - TestNet deployment with 50+ test parties across 2+ resolver types
-  - **Exit criterion:** WG confirms prototype resolves names on TestNet; <100ms p95 latency
+  - Exit criterion: WG confirms prototype resolves names on TestNet; <100ms p95 latency
 
 ### Milestone A3: Resolution SDK & Ecosystem Adoption
 
-- **Estimated Delivery:** 10 weeks from A2 completion
-- **Focus:** Developer tooling, documentation, and initial adoption
-- **Deliverables / Value Metrics:**
+- Estimated Delivery: 10 weeks from A2 completion
+- Focus: Developer tooling, documentation, and initial adoption
+- Deliverables / Value Metrics:
   - `@cprp/sdk` (TypeScript) published to npm
   - `cprp-sdk` (Python) published to PyPI
   - `com.cprp:cprp-sdk` (Java/Kotlin) published to Maven
@@ -113,7 +113,7 @@ CPRP is fully additive with zero breaking changes:
   - Integration guide, migration guide (CNS 1.0 → CPRP), display model guide
   - Reference wallet app demonstrating resolution + address book integration
   - Adoption support: office hours, WG presentations, early adopter onboarding
-  - **Exit criterion:** 2+ Canton ecosystem apps integrated in testnet or staging
+  - Exit criterion: 2+ Canton ecosystem apps integrated in testnet or staging
 
 ## Acceptance Criteria
 
