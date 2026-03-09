@@ -100,4 +100,5 @@ Global Synchronizer CIPs
 | [cip-0104](/cip-0104/cip-0104.md) |  | Traffic-Based App Rewards | Simon Meier | Tokenomics | Approved|
 | [cip-0105](/cip-0105/cip-0105.md) |  |Super Validator (SV) Locking & Long-Term Commitment Framework | Eric Saraniecki w/ Community Proposal| Tokenomics | Approved |
 | [cip-0106](/cip-0106/cip-0106.md) |  |Add QCP Group as a Super Validator (weight 5.0) | Yiannis Varelas, Eric Saraniecki | Governance | Approved |
+| [cip-0107](/cip-0107/cip-0107.md) |  |24h Submission Delay for End-User CC Transactions | Simon Meier, Moritz Kiefer | Standards Track | Proposed |
 
