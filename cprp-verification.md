@@ -10,8 +10,6 @@ Status: Draft
 
 Created: 2026-03-02
 
-License: CC0-1.0
-
 Post-History: Canton Identity and Metadata Working Group (Jan–Feb 2026)
 
 Requires: CIP-XXXX (Party Name Resolution), CN Credentials Standard (CIP TBD)
