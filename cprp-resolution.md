@@ -1,15 +1,23 @@
 Number: CIP-XXXX
-Title: Party Name Resolution
+
+Title: Canton Party Resolution Protocol (CPRP) - Party Identity Resolution
+
 Author(s): Paolo Domenighetti (Freename AG)
+
 Type: Standards Track
+
 Status: Draft
+
 Created: 2026-03-02
+
 License: CC0-1.0
+
 Post-History: Canton Identity and Metadata Working Group (Jan–Feb 2026)
+
 Requires: CN Credentials Standard (CIP TBD), CNS 2.0 (CIP TBD)
+
 Related: CIP-YYYY (Party Identity Verification)
 
----
 
 ## Summary
 
@@ -17,19 +25,18 @@ This CIP defines the resolution layer of the Canton Party Resolution Protocol (C
 
 The protocol introduces:
 
-- A **Fully Qualified Party Name (FQPN)** addressing format with network discrimination
-- A **Resolver Interface** that any identity provider can implement (DNS, vLEI, CN Credentials, ENS, application directories)
-- An **app-configurable Resolution Strategy** where each application decides which resolvers to query and in what order
-- A **Composition Engine** that merges results from multiple resolvers, detects collisions, and applies weighting
-- **Address book integration** for institutional counterparty directories
-- **Name delegation** for organizational hierarchies (e.g., `treasury.acme.com`)
-- A **three-layer display model** for uniform party name rendering across Scan and all applications
+- A Fully Qualified Party Name (FQPN) addressing format with network discrimination
+- A Resolver Interface that any identity provider can implement (DNS, vLEI, CN Credentials, ENS, application directories)
+- An app-configurable Resolution Strategy where each application decides which resolvers to query and in what order
+- A Composition Engine that merges results from multiple resolvers, detects collisions, and applies weighting
+- Address book integration for institutional counterparty directories
+- Name delegation for organizational hierarchies (e.g., `treasury.acme.com`)
+- A three-layer display model for uniform party name rendering across Scan and all applications
 
 This CIP focuses on the naming and resolution mechanics. Trust evaluation, issuer classification, verification policies, and encrypted metadata are defined in the companion CIP-YYYY (Party Identity Verification).
 
 A shared technical specification accompanies both CIPs: [CPRP-spec.md](./CPRP-spec.md).
 
----
 
 ## Motivation
 
@@ -43,7 +50,7 @@ The Working Group has identified that Canton will have multiple identity sources
 
 ### The Missing Layer
 
-Digital Asset is building credential formats and a registry (what the data looks like). PixelPlex is exploring credential storage (where the data lives). This CIP addresses **how an application navigates from a human-readable name, across multiple identity sources, to a Canton Party ID** — with configurable resolution strategies per application.
+Digital Asset is building credential formats and a registry (what the data looks like). PixelPlex is exploring credential storage (where the data lives). This CIP addresses how an application navigates from a human-readable name, across multiple identity sources, to a Canton Party ID — with configurable resolution strategies per application.
 
 ### Alignment with Working Group Principles
 
@@ -56,7 +63,6 @@ This CIP implements the resolution-specific design principles established in the
 - Supports integrating existing name providers (DNS, ENS, vLEI) as resolvers
 - Supports local address books as a resolver type
 
----
 
 ## Specification Overview
 
@@ -95,9 +101,9 @@ Each resolver publishes backing credentials via the CN Credentials Daml interfac
 
 | Resolver Type | Registration | Trust Tier | Example |
 |--------------|-------------|-----------|---------|
-| **Featured** | SV governance vote (on-ledger `ResolverFeaturedStatus`) | T3 | Freename, 7Trust |
-| **Permissionless** | No registration required; implements the interface | T4 | Any third-party identity service |
-| **Address Book** | Local to the application; no network registration | App-defined | Citadel internal directory |
+| Featured | SV governance vote (on-ledger `ResolverFeaturedStatus`) | T3 | Freename, 7Trust |
+| Permissionless | No registration required; implements the interface | T4 | Any third-party identity service |
+| Address Book | Local to the application; no network registration | App-defined | Citadel internal directory |
 
 ### Resolution Strategy
 
@@ -123,9 +129,9 @@ Three resolution modes:
 
 | Mode | Behavior | Use Case |
 |------|----------|----------|
-| **Priority** | Resolvers queried sequentially by weight; first match wins | Low-latency applications |
-| **Parallel** | All resolvers queried simultaneously; results composed by weight | Maximum verification depth |
-| **Quorum** | Resolution succeeds only when N resolvers agree on the same Party ID | High-security applications |
+| Priority | Resolvers queried sequentially by weight; first match wins | Low-latency applications |
+| Parallel | All resolvers queried simultaneously; results composed by weight | Maximum verification depth |
+| Quorum | Resolution succeeds only when N resolvers agree on the same Party ID | High-security applications |
 
 Two reference strategies are defined in the spec:
 - `INSTITUTIONAL_DEFAULT` — parallel mode, strict collision policy, requires DNS or vLEI
@@ -140,11 +146,11 @@ When multiple resolvers return results for the same query, the Composition Engin
 3. For cross-resolver duplicates: merges metadata, selects display name by weight
 4. For conflicting `party_id` values: triggers collision handling per the strategy's `collision_policy`
 5. Merges credential arrays, endpoint maps, and profile claims across all sources
-6. Records **per-claim provenance** (`claim_sources`): for each metadata key, tracks which resolver and issuer contributed the value — enabling institutional audit trails
+6. Records per-claim provenance (`claim_sources`): for each metadata key, tracks which resolver and issuer contributed the value — enabling institutional audit trails
 
 ### Profile Rendering Guidelines
 
-Profile claims (`cns-2.0/name`, `cns-2.0/avatar`, `cns-2.0/email`, `cns-2.0/website`) are **informational only** and MUST NOT be interpreted as verified identity attributes. Verification status is determined exclusively by CIP-YYYY's trust evaluation, not by profile content. Display names SHOULD be ≤64 Unicode characters. Avatars SHOULD be `https://` URLs; applications MAY additionally support `ipfs://` URIs.
+Profile claims (`cns-2.0/name`, `cns-2.0/avatar`, `cns-2.0/email`, `cns-2.0/website`) are informational only and MUST NOT be interpreted as verified identity attributes. Verification status is determined exclusively by CIP-YYYY's trust evaluation, not by profile content. Display names SHOULD be ≤64 Unicode characters. Avatars SHOULD be `https://` URLs; applications MAY additionally support `ipfs://` URIs.
 
 Social contact claims use the extensible `cprp/social:<platform>` convention (e.g., `cprp/social:telegram`, `cprp/social:x`, `cprp/social:github`, `cprp/social:discord`). These are T4 (self-attested) by default and are compatible with the PixelPlex Party Profile Credentials CIP.
 
@@ -154,8 +160,8 @@ When the same name maps to different parties across resolvers:
 
 | Policy | Behavior |
 |--------|----------|
-| **Strict** | Returns status `COLLISION` with both candidates; app must present disambiguation UI |
-| **Permissive** | Selects the highest-weight result; attaches collision warning to the response |
+| Strict | Returns status `COLLISION` with both candidates; app must present disambiguation UI |
+| Permissive | Selects the highest-weight result; attaches collision warning to the response |
 
 Governance-based arbitration is available for disputes between featured resolvers via a `CollisionArbitration` Daml contract (T1 authority).
 
@@ -163,9 +169,9 @@ Governance-based arbitration is available for disputes between featured resolver
 
 Local and organization-scoped address books integrate as a special resolver type:
 
-- **In-process:** SDK loads entries from a local database or config file
-- **Org-scoped:** Corporate LDAP/directory service exposed via the resolver interface
-- **Validator-configured:** Pre-loaded at the validator level for all apps on that node
+- In-process: SDK loads entries from a local database or config file
+- Org-scoped: Corporate LDAP/directory service exposed via the resolver interface
+- Validator-configured: Pre-loaded at the validator level for all apps on that node
 
 Address books provide display names only — they cannot override trust tier or verification status (those come from CIP-YYYY).
 
@@ -193,9 +199,9 @@ Party identity is rendered in three progressive layers:
 
 | Layer | Surface | Content |
 |-------|---------|---------|
-| **L1: Inline** | Transaction lists, counterparty fields | Display name + verification badge (✓ or ⚠) |
-| **L2: Hover** | Tooltip/popover on hover or tap | Profile card: name, LEI, jurisdiction, issuer summary |
-| **L3: Full** | Scan profile page | Complete profile: all credentials, trust path, endpoints, history, delegation chain |
+| L1: Inline | Transaction lists, counterparty fields | Display name + verification badge (✓ or ⚠) |
+| L2: Hover | Tooltip/popover on hover or tap | Profile card: name, LEI, jurisdiction, issuer summary |
+| L3: Full | Scan profile page | Complete profile: all credentials, trust path, endpoints, history, delegation chain |
 
 Fallback chain: display name → CNS 1.0 entry → party ID prefix → truncated party ID.
 
@@ -212,7 +218,6 @@ The Resolution Service exposes:
 | `/v1/resolvers` | GET | List available resolvers and their status |
 | `/v1/health` | GET | Service health check |
 
----
 
 ## Daml Contracts
 
@@ -228,7 +233,6 @@ Authorizes subname delegation. Fields: `parent_party`, `delegatee_party`, `paren
 
 Estimated ACS impact for resolution-only contracts: ~900 bytes per party for registration + ~800 bytes per delegation.
 
----
 
 ## Backwards Compatibility
 
@@ -254,7 +258,6 @@ Additive only — no breaking changes to existing Scan functionality. The three-
 
 CPRP adoption is opt-in. Non-adopting apps continue to use raw Party IDs or CNS 1.0 names exactly as before.
 
----
 
 ## Security Considerations
 
@@ -269,20 +272,17 @@ CPRP adoption is opt-in. Non-adopting apps continue to use raw Party IDs or CNS 
 
 Trust-layer threats (credential replay, issuer impersonation, encrypted field attacks) are addressed in CIP-YYYY.
 
----
 
 ## Implementation
 
 A reference implementation is proposed as a Canton Protocol Development Fund grant (PR to `canton-dev-fund`). The resolution layer is delivered across milestones A1 (CIP design + resolver interface), A2 (resolver prototype + TestNet), and A3 (resolution SDK + adoption) — see Grant A: Party Name Resolution ($250k).
 
----
 
 ## Companion Documents
 
-- **CIP-YYYY: Party Identity Verification** — Trust tier model, verification policies, credential mapping, encrypted fields, vLEI verification, cross-chain identity
-- **[CPRP-spec.md](./CPRP-spec.md)** — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, migration, and milestones
+- CIP-YYYY: Party Identity Verification — Trust tier model, verification policies, credential mapping, encrypted fields, vLEI verification, cross-chain identity
+- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, migration, and milestones
 
----
 
 ## Copyright
 
