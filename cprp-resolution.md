@@ -277,9 +277,4 @@ A reference implementation is proposed as a Canton Protocol Development Fund gra
 ## Companion Documents
 
 - CIP-YYYY: Party Identity Verification — Trust tier model, verification policies, credential mapping, encrypted fields, vLEI verification, cross-chain identity
-- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, migration, and milestones
-
-
-## Copyright
-
-This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
+- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, migration, and milestones.
