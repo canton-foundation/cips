@@ -288,9 +288,4 @@ A reference implementation is proposed as a Canton Protocol Development Fund gra
 ## Companion Documents
 
 - CIP-XXXX: Party Name Resolution — FQPN format, resolver interface, resolution strategy, composition engine, address books, name delegation, display model
-- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, migration, and milestones
-
-
-## Copyright
-
-This CIP is licensed under CC0-1.0: Creative Commons CC0 1.0 Universal.
+- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, migration, and milestones.
