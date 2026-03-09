@@ -99,5 +99,5 @@ Global Synchronizer CIPs
 | [cip-0103](/cip-0103/cip-0103.md) |  | dApp Standard| Marc Juchli, Alexey Chyker, Eugene Birski| Standards Track | Approved |
 | [cip-0104](/cip-0104/cip-0104.md) |  | Traffic-Based App Rewards | Simon Meier | Tokenomics | Approved|
 | [cip-0105](/cip-0105/cip-0105.md) |  |Super Validator (SV) Locking & Long-Term Commitment Framework | Eric Saraniecki w/ Community Proposal| Tokenomics | Approved |
-| [cip-0106](/cip-0106/cip-0106.md) |  |Add QCP Group as a Super Validator (weight 5.0) | Yiannis Varelas, Eric Saraniecki | Governance | Proposed |
+| [cip-0106](/cip-0106/cip-0106.md) |  |Add QCP Group as a Super Validator (weight 5.0) | Yiannis Varelas, Eric Saraniecki | Governance | Approved |
 
