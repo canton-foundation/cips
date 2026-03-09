@@ -4,8 +4,6 @@ Title: Canton Party Resolution Protocol (CPRP) - Party Identity Verification
 
 Author(s): Paolo Domenighetti (Freename AG)
 
-Type: Standards Track
-
 Status: Draft
 
 Created: 2026-03-02
