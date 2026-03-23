@@ -102,4 +102,5 @@ Global Synchronizer CIPs
 | [cip-0106](/cip-0106/cip-0106.md) |  |Add QCP Group as a Super Validator (weight 5.0) | Yiannis Varelas, Eric Saraniecki | Governance | Approved |
 | [cip-0107](/cip-0107/cip-0107.md) |  |24h Submission Delay for End-User CC Transactions | Simon Meier, Moritz Kiefer | Standards Track | Approved |
 | [cip-0108](/cip-0108/cip-0108.md) |  |Add Merkle Science’s Predictive Analytics as a Weight 1 SV | Dr. Justus Delp | Governance | Proposed |
+| [cip-0109](/cip-0109/cip-0109.md) |  | Visa Super Validator Participation | Eric Saraniecki | Governance | Approved |
 
