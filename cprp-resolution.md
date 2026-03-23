@@ -22,6 +22,7 @@ This CIP defines the resolution layer of the Canton Party Resolution Protocol (C
 The protocol introduces:
 
 - A Fully Qualified Party Name (FQPN) addressing format with network discrimination
+- A built-in `party` resolver ensuring every Canton party always has at least one FQPN
 - A Resolver Interface that any identity provider can implement (DNS, vLEI, CN Credentials, ENS, application directories)
 - An app-configurable Resolution Strategy where each application decides which resolvers to query and in what order
 - A Composition Engine that merges results from multiple resolvers, detects collisions, and applies weighting
@@ -79,12 +80,15 @@ Examples:
 - `mainnet/dns:goldmansachs.com:default`
 - `mainnet/vlei:784F5XWPLTWKTBV3E584:default`
 - `testnet/freename:acme-bank.canton:treasury`
+- `mainnet/party:<namespace>:<prefix>` (built-in, every party gets one automatically)
+
+The `.canton` namespace examples: `alice.canton` (individual), `goldmansachs.canton` (institution), `treasury.acme.canton` (delegated subname). Users type `alice.canton` — the full FQPN is infrastructure-level, invisible to users, like IP addresses behind DNS.
 
 Network discrimination is a security requirement: TestNet names must not be confusable with MainNet names.
 
 ### Resolver Interface
 
-Any identity provider can become a CPRP resolver by implementing the following interface:
+Any identity provider can become a CPRP resolver by implementing the following logical interface (these are method signatures, not HTTP verbs — the HTTP mapping is defined in the companion specification §12):
 
 | Method | Input | Output | Purpose |
 |--------|-------|--------|---------|
@@ -97,9 +101,19 @@ Each resolver publishes backing credentials via the CN Credentials Daml interfac
 
 | Resolver Type | Registration | Trust Tier | Example |
 |--------------|-------------|-----------|---------|
-| Featured | SV governance vote (on-ledger `ResolverFeaturedStatus`) | T3 | Freename, 7Trust |
-| Permissionless | No registration required; implements the interface | T4 | Any third-party identity service |
+| Featured | SV governance vote (on-ledger credential published by DSO) | Elevated | Freename, 7Trust |
+| Permissionless | No registration required; implements the interface | Base | Any third-party identity service |
 | Address Book | Local to the application; no network registration | App-defined | Citadel internal directory |
+
+Note: the trust weight and tier classification of resolvers is defined in CIP-YYYY (Party Identity Verification). This CIP defines the resolver types and their registration mechanism; CIP-YYYY defines what trust level each type carries. Applications that adopt only CIP-XXXX (without CIP-YYYY) treat all resolved identities as unverified.
+
+### Claim Key Namespace Conventions
+
+CPRP claim keys follow the `<authority>/<key>` format. Three authority prefixes are defined:
+
+- `cprp/*` — protocol-level claims defined in this CIP and CIP-YYYY (e.g., `cprp/resolver`, `cprp/endpoint:api`)
+- `cip-<nr>/*` — claims defined by other CIPs, notably the PixelPlex Party Profile Credentials CIP (e.g., profile display claims; `cns-2.0/*` is used as a working prefix until the CIP number is assigned)
+- `<domain>/*` — third-party resolver claims scoped by the resolver's DNS domain (e.g., `freename.com/verified-since`, `7trust.c7.digital/reputation-score`), following K8s-style annotation conventions
 
 ### Resolution Strategy
 
@@ -169,7 +183,7 @@ Local and organization-scoped address books integrate as a special resolver type
 - Org-scoped: Corporate LDAP/directory service exposed via the resolver interface
 - Validator-configured: Pre-loaded at the validator level for all apps on that node
 
-Address books provide display names only — they cannot override trust tier or verification status (those come from CIP-YYYY).
+Address books provide display names and profile metadata (contact info, internal notes, custom labels) — but this data is locally scoped with no external trust weight. Address book claims cannot override trust tier or verification status (those come from CIP-YYYY). Typical use: an institution shows "GS Prime" instead of "Goldman Sachs" for internal convenience, while network resolvers still control verification status.
 
 ### Name Delegation
 
@@ -189,6 +203,14 @@ Name owners can authorize sub-parties to register subnames. Delegation is modele
 - Resolver-agnostic (multiple resolvers can serve `.canton` names)
 - Registration model defined by each resolver's own policy
 
+Examples of .canton names:
+
+- `alice.canton` — an individual or small entity registers a .canton name through a featured resolver (e.g., xNS, Freename), similar to registering `alice.eth` on ENS
+- `goldmansachs.canton` — an institution registers its canonical Canton-native name
+- `treasury.acme.canton` — a delegated subname under `acme.canton` for a treasury desk
+
+Users type `alice.canton` directly. The FQPN infrastructure is invisible — resolvers and namespaces are handled by the SDK, just as DNS root servers and TLD delegation are invisible to web users.
+
 ### Three-Layer Display Model
 
 Party identity is rendered in three progressive layers:
@@ -197,7 +219,7 @@ Party identity is rendered in three progressive layers:
 |-------|---------|---------|
 | L1: Inline | Transaction lists, counterparty fields | Display name + verification badge (✓ or ⚠) |
 | L2: Hover | Tooltip/popover on hover or tap | Profile card: name, LEI, jurisdiction, issuer summary |
-| L3: Full | Scan profile page | Complete profile: all credentials, trust path, endpoints, history, delegation chain |
+| L3: Full | Explorer profile page (Scan or third-party) | Complete profile: all credentials, trust path, endpoints, history, delegation chain |
 
 Fallback chain: display name → CNS 1.0 entry → party ID prefix → truncated party ID.
 
@@ -215,19 +237,19 @@ The Resolution Service exposes:
 | `/v1/health` | GET | Service health check |
 
 
-## Daml Contracts
+## On-Ledger Representation
 
-Two on-ledger contract templates support the resolution layer:
+Resolution-layer data is encoded as standard CN Credentials — no custom Daml templates are required.
 
-### PartyNameRegistration
+### PartyNameRegistration (as credential)
 
-Binds a name to a Party ID within a resolver/namespace. Fields: `resolver_id`, `namespace`, `name`, `party_id`, `network`, `record_version`. Choices: `UpdateRegistration`, `RevokeRegistration`.
+A name registration is a credential where publisher = resolver party, subject = registered party, holder = registered party. Claims include `cprp/resolver`, `cprp/namespace`, `cprp/name`, `cprp/network`, and a `cprp/record-version`. Updates are modeled as archiving the old credential and publishing a new one. Revocation is modeled as archival.
 
-### NameDelegation
+### NameDelegation (as credential)
 
-Authorizes subname delegation. Fields: `parent_party`, `delegatee_party`, `parent_fqpn`, `allowed_subnames`, `delegation_scope`, `network`. Choices: `RevokeDelegation`, `SubDelegate` (if scope permits).
+A delegation is a credential where publisher = parent party, subject = child party (delegatee), holder = child party. Claims include `cprp/delegation: true`, `cprp/parent-fqpn`, `cprp/delegated-name`, and `cprp/delegation-scope` (`name-only` or `name-and-subdelegation`). Revocation by the parent archives the credential. Sub-delegation is modeled as the child publishing a new credential for a sub-delegatee if scope permits.
 
-Estimated ACS impact for resolution-only contracts: ~900 bytes per party for registration + ~800 bytes per delegation.
+Estimated ACS impact: ~900 bytes per party for registration + ~800 bytes per delegation. Whether these credentials belong in the DSO registry or a separate app-layer registry is an implementation decision to be resolved during development.
 
 
 ## Backwards Compatibility
@@ -238,9 +260,14 @@ CPRP is fully backward compatible with CNS 1.0:
 
 - Existing `.unverified.cns` names continue to work unchanged
 - A `cns-v1` resolver plugin wraps the existing `DsoAnsResolver` as a CPRP-compatible resolver
-- The `cns-v1` plugin returns CNS 1.0 names as T4 (self-attested) credentials with low weight (0.3)
+- The `cns-v1` plugin returns CNS 1.0 names as self-attested credentials with low weight (0.3)
 - Parties can upgrade to verified names via `cprp-cli upgrade` while retaining CNS 1.0 aliases
 - No migration is forced — adoption is entirely opt-in
+
+Concrete examples of how existing names map under CPRP:
+
+- `goldmansachs.unverified.cns` — the cns-v1 resolver plugin reads this from Scan and returns it as a CPRP resolution record. CPRP-enabled apps see it alongside any higher-trust results (e.g., DNS-verified). No change needed from the user or from CNS 1.0.
+- `digital-asset.sv.cns` — the cns-v1 plugin exposes this as `cns-v1:sv.cns:digital-asset`. If the SV also registers via DNS verification, they additionally have `dns:digitalasset.com:default` at higher trust. Both names coexist in the composition result — the app's strategy decides which to display.
 
 ### CN Credentials
 
