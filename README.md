@@ -104,4 +104,4 @@ Global Synchronizer CIPs
 | [cip-0108](/cip-0108/cip-0108.md) |  |Add Merkle Science’s Predictive Analytics as a Weight 1 SV | Dr. Justus Delp | Governance | Proposed |
 | [cip-0109](/cip-0109/cip-0109.md) |  | Visa Super Validator Participation | Eric Saraniecki | Governance | Approved |
 | [cip-0110](/cip-0110/cip-0110.md) |  | Add Apollo as max weight 7 SV | Yiannis Varelas | Governance | Proposed |
-
+| [cip-0111](/cip-0111/cip-0111.md) |  | Process for Reducing Super Validator Weight | Chris Zuehlke, Andrew Bryan, Alex Chen| Governance | Proposed |
