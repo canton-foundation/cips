@@ -60,22 +60,36 @@ Each App Provider maintains a public or private Git repository with the followin
 ```
 app-provider-repo/
 ├── README.md
-├── packages/
-│   ├── splice-amulet-0.1.16/
-│   │   ├── package.dar
-│   │   └── metadata.json
-│   ├── splice-util-0.1.5_5a58024e2cc488ca9e0c952ec7ef41da3a1ed0a78ba23bacd819e5b30afb5546/
-│   │   ├── package.dar
-│   │   └── metadata.json
-│   └── ...
-├── audits.json
-└── build-configs/
-    ├── splice-amulet-0.1.16/
-    │   └── build-config.json
-    └── ...
+├── apps/
+│   ├── canton-coin/
+│   │   ├── packages/
+│   │   │   ├── splice-amulet-0.1.16/
+│   │   │   │   ├── package.dar
+│   │   │   │   ├── metadata.json
+│   │   │   │   ├── audit-reports.json
+│   │   │   │   └── build-config.json
+│   │   │   └── splice-util-0.1.5_5a58024e2cc488ca9e0c952ec7ef41da3a1ed0a78ba23bacd819e5b30afb5546/
+│   │   │       ├── package.dar
+│   │   │       ├── metadata.json
+│   │   │       ├── audit-reports.json
+│   │   │       └── build-config.json
+│   │   └── vetting-states/
+│   │       ├── mainnet.json
+│   │       ├── devnet.json
+│   │       └── testnet.json
+│   └── global-sync-governance/
+│       ├── packages/
+│       │   └── splice-dso-governance-0.1.22_5c28530209b9ab37c5f187132cd826709bb18b0efe28411488ab750870414738/
+│       │       ├── package.dar
+│       │       ├── metadata.json
+│       │       ├── audit-reports.json
+│       │       └── build-config.json
+│       └── vetting-states/
+│           ├── mainnet.json
+│           └── testnet.json
 ```
 
-**Note on Directory Naming**: Directories under `packages/` should use the full package name and version (e.g., `package-name-1.2.3`). To avoid conflicts when publishing multiple versions of the same package, an optional `_<package_hash>` suffix may be appended.
+**Note on Directory Naming**: Directories under `packages/` must use the full package name, version, and an underscore-prefixed package hash (e.g., `package-name-1.2.3_hash`). This ensures uniqueness and avoids conflicts.
 
 #### Package Metadata Format
 
@@ -113,7 +127,7 @@ The `metadata.json` file for each package version follows this JSON schema:
     }
   ],
   "build_reproducibility": {
-    "daml_sdk_version": "2.5.0",
+    "daml_sdk_version": "3.3.0",
     "ghc_version": "9.2.4",
     "build_timestamp": "2026-02-27T00:00:00Z",
     "build_parameters": {
@@ -123,11 +137,7 @@ The `metadata.json` file for each package version follows this JSON schema:
     "build_instructions_url": "https://github.com/org/repo/blob/main/BUILD.md#v1.0.0"
   },
   "security_properties": {
-    "daml_stdlib_version": "2.5.0",
-    "uses_external_bindings": false,
-    "uses_party_operations": true,
-    "uses_authorization": true,
-    "uses_contract_fetch": true,
+    "daml_stdlib_version": "3.3.0",
     "notable_modules": [
       {
         "module_name": "App.Security.Authorization",
@@ -151,6 +161,11 @@ The `metadata.json` file for each package version follows this JSON schema:
 }
 ```
 
+##### Security Properties Definitions
+
+- **`daml_stdlib_version`**: The version of the Daml Standard Library used to compile the package.
+- **`notable_modules`**: A list of modules that are particularly important for security review (e.g., core business logic, authorization modules).
+
 #### Build Configuration Format
 
 The `build-config.json` file contains reproducible build information:
@@ -161,7 +176,7 @@ The `build-config.json` file contains reproducible build information:
   "build_id": "unique-identifier",
   "package_version": "1.0.0",
   "build_timestamp": "2026-02-27T10:30:00Z",
-  "daml_sdk_version": "2.5.0",
+  "daml_sdk_version": "3.3.0",
   "daml_sdk_hash": {
     "algorithm": "sha256",
     "value": "hex-encoded-hash"
@@ -190,34 +205,72 @@ The `build-config.json` file contains reproducible build information:
 }
 ```
 
-#### App Provider Audits Summary
+#### Package Audit Reports
 
-The `audits.json` file in the root directory summarizes available audits:
+The `audit-reports.json` file in each package directory summarizes available audits:
 
 ```json
 {
   "schema_version": "1.0",
-  "publisher": "app-provider-name",
-  "last_updated": "2026-02-27T00:00:00Z",
-  "audits": [
+  "package_id": "splice-amulet",
+  "package_version": "0.1.16",
+  "package_hash": {
+    "algorithm": "sha256",
+    "value": "c208d7ead1e4e9b610fc2054d0bf00716144ad444011bce0b02dcd6cd0cb8a23"
+  },
+  "audit_results": [
     {
-      "package_version": "1.0.0",
-      "package_hash": {
-        "algorithm": "sha256",
-        "value": "5a58024e2cc488ca9e0c952ec7ef41da3a1ed0a78ba23bacd819e5b30afb5546"
-      },
-      "audit_results": [
-        {
-          "auditor_name": "SecurityAuditorCompany",
-          "audit_date": "2026-02-20T00:00:00Z",
-          "audit_report_url": "https://github.com/auditor/audit-reports/blob/main/reports/app-provider-name/1.0.0/audit-report.json",
-          "audit_status": "passed",
-          "severity_rating": "none",
-          "expiration_date": "2027-02-27T00:00:00Z"
-        }
-      ]
+      "auditor_name": "Security Auditor Company",
+      "audit_date": "2026-02-20T00:00:00Z",
+      "audit_report_url": "https://github.com/auditor/audit-reports/blob/main/reports/app-provider-name/1.0.0/audit-report.json",
+      "audit_status": "passed",
+      "severity_rating": "none",
+      "expiration_date": "2027-02-27T00:00:00Z"
     }
   ]
+}
+```
+
+#### Vetting States Format
+
+The `vetting-states/` directory contains JSON files (e.g., `mainnet.json`, `testnet.json`) that define the desired vetting state for the application on a specific network. This allows App Providers to communicate which package versions should be vetted or unvetted as part of a single application update.
+
+```json
+{
+  "schema_version": "1.0",
+  "app_name": "canton-coin",
+  "network": "mainnet",
+  "last_updated": "2026-03-01T10:00:00Z",
+  "vetting_state": {
+    "vet": [
+      {
+        "package_id": "splice-amulet",
+        "package_version": "0.1.16",
+        "package_hash": {
+          "algorithm": "sha256",
+          "value": "c208d7ead1e4e9b610fc2054d0bf00716144ad444011bce0b02dcd6cd0cb8a23"
+        }
+      },
+      {
+        "package_id": "splice-util",
+        "package_version": "0.1.5",
+        "package_hash": {
+          "algorithm": "sha256",
+          "value": "5a58024e2cc488ca9e0c952ec7ef41da3a1ed0a78ba23bacd819e5b30afb5546"
+        }
+      }
+    ],
+    "unvet": [
+      {
+        "package_id": "splice-amulet",
+        "package_version": "0.1.15",
+        "package_hash": {
+          "algorithm": "sha256",
+          "value": "..."
+        }
+      }
+    ]
+  }
 }
 ```
 
@@ -232,8 +285,8 @@ This package has been validated by the following security auditors:
 
 | Version | Auditor | Date | Status | Report |
 |---------|---------|------|--------|--------|
-| 1.0.0 | SecurityAuditorCompany | 2026-02-20 | ✓ Passed | [Audit Report](https://github.com/auditor/audit-reports/blob/main/reports/app-provider-name/1.0.0/audit-report.json) |
-| 1.1.0 | SecurityAuditorCompany | 2026-02-26 | ✓ Passed | [Audit Report](https://github.com/auditor/audit-reports/blob/main/reports/app-provider-name/1.1.0/audit-report.json) |
+| 1.0.0 | Security Auditor Company | 2026-02-20 | ✓ Passed | [Audit Report](https://github.com/auditor/audit-reports/blob/main/reports/app-provider-name/1.0.0/audit-report.json) |
+| 1.1.0 | Security Auditor Company | 2026-02-26 | ✓ Passed | [Audit Report](https://github.com/auditor/audit-reports/blob/main/reports/app-provider-name/1.1.0/audit-report.json) |
 | 1.1.0 | AnotherAuditor | 2026-02-25 | ✓ Passed | [Audit Report](https://github.com/another-auditor/audits/blob/main/reports/app-provider/1.1.0/audit.json) |
 
 **Note**: Audits are valid for one year from the date of issue.
@@ -480,7 +533,7 @@ Validator Node Providers implement the following process before integrating a th
   "schema_version": "1.0",
   "verification_process": {
     "step_1_locate_package": {
-      "description": "Find the package in App Provider's repository",
+      "description": "Find the package in the App Provider's apps/ directory",
       "checks": [
         "Package hash matches download",
         "Metadata.json is present and valid",
@@ -489,7 +542,7 @@ Validator Node Providers implement the following process before integrating a th
     },
     "step_2_gather_audits": {
       "description": "Fetch audit results from known auditors",
-      "method": "Query audits.json from App Provider repository and fetch reports from referenced URLs"
+      "method": "Query audit-reports.json from the versioned package directory and fetch reports from referenced URLs"
     },
     "step_3_verify_audit_integrity": {
       "description": "Verify audit report signatures and validity",
@@ -556,6 +609,53 @@ Validator Node Providers maintain records of their integration decisions:
   ]
 }
 ```
+
+### Component 5: OCI Distribution (Optional)
+
+As an alternative or complementary distribution method to Git, App Providers may publish their packages as OCI (Open Container Initiative) artifacts. This enables standard OCI registries to be used for storage and discovery.
+
+#### OCI Artifact Mapping
+
+Packages should be published to a registry at `oci://<registry>/<app-provider>/<package-name>:<version>`. The OCI artifact should contain the same file structure as the Git repository under the versioned package directory:
+
+```
+/
+├── package.dar
+├── metadata.json
+├── audit-reports.json
+└── build-config.json
+```
+
+#### OCI Annotations
+
+To enable efficient discovery without downloading the entire artifact, key metadata from `metadata.json` should be mapped to OCI annotations:
+
+```json
+{
+  "org.opencontainers.image.title": "splice-amulet",
+  "org.opencontainers.image.version": "0.1.16",
+  "org.opencontainers.image.licenses": "Apache-2.0",
+  "org.opencontainers.image.vendor": "App Provider Name",
+  "com.package.hash": "c208d7ead1e4e9b610fc2054d0bf00716144ad444011bce0b02dcd6cd0cb8a23",
+  "com.sdk.version": "3.3.0",
+  "com.security.properties": "{\"daml_stdlib_version\":\"3.3.0\",\"notable_modules\":[...]}",
+  "com.audit.status": "passed"
+}
+```
+
+### JSON Schemas
+
+The following JSON schemas formally define the metadata formats used in this CIP:
+
+- **Package Metadata**: `schemas/metadata.schema.json`
+- **Build Configuration**: `schemas/build-config.schema.json`
+- **Package Audit Reports**: `schemas/audit-reports.schema.json`
+- **Application Vetting State**: `schemas/vetting-state.schema.json`
+- **Audit Request**: `schemas/audit-request.schema.json`
+- **Security Audit Report**: `schemas/audit-report.schema.json`
+- **Security Auditor Index**: `schemas/auditor-index.schema.json`
+- **Verification Procedure**: `schemas/verification-procedure.schema.json`
+- **Integration Decision Document**: `schemas/integration-decision.schema.json`
 
 ## Motivation
 
