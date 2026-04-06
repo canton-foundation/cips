@@ -17,62 +17,65 @@
 
 ## Abstract
 
-This CIP proposes a standardized protocol for secure interaction between three parties in the Daml application ecosystem: **AppProviders**, **WalletProviders**, and **SecurityAuditors**. The standard defines how AppProviders publish Daml packages (.dar files) with cryptographically verifiable build metadata, how they request security audits from independent SecurityAuditors, and how WalletProviders can discover and verify audit results to make informed security decisions before integrating third-party packages.
+This CIP proposes a standardized protocol for secure interaction between three parties in the Daml application ecosystem: **App Providers**, **Validator Node Providers**, and **Security Auditors**. The standard defines how App Providers publish Daml packages (.dar files) with cryptographically verifiable build metadata, how they request security audits from independent Security Auditors, and how Validator Node Providers can discover and verify audit results to make informed security decisions before integrating third-party packages.
 
-The protocol establishes transparent, Git-based publication channels for both AppProvider packages and audit results, enabling WalletProviders to establish trust through verifiable security validations without requiring direct auditing capabilities.
+The protocol establishes transparent, Git-based publication channels for both App Provider packages and audit results, enabling Validator Node Providers to establish trust through verifiable security validations without requiring direct auditing capabilities.
 
 ## Specification
 
 This CIP proposes a standardized protocol with three main components:
 
-1. **Package Publication Standard**: AppProviders publish Daml packages with structured metadata
-2. **Audit Request and Response Protocol**: Standardized communication between AppProviders and auditors
-3. **Audit Result Publication**: SecurityAuditors and WalletProviders publish audit results in verifiable Git repositories
+1. **Package Publication Standard**: App Providers publish Daml packages with structured metadata
+2. **Audit Request and Response Protocol**: Standardized communication between App Providers and auditors
+3. **Audit Result Publication**: Security Auditors and Validator Node Providers publish audit results in verifiable Git repositories
 
 ### Overview
 
 #### Parties
 
-- **AppProvider**: An organization or individual developing Daml applications and publishing Daml packages (.dar files)
-- **WalletProvider**: A service provider managing digital assets on behalf of users, integrating third-party Daml applications
-- **SecurityAuditor**: An independent security firm or team validating the security properties of Daml packages
+- **App Provider**: An organization or individual developing Daml applications and publishing Daml packages (.dar files)
+- **Validator Node Provider**: A service provider providing users with access to a Canton Network validator node hosting their parties.
+- **Security Auditor**: An independent security firm or team validating the security properties of Daml packages
 
 #### Problem Statement
 
-As the Daml ecosystem grows, WalletProviders need a reliable mechanism to:
+As the Daml ecosystem grows, Validator Node Providers need a reliable mechanism to:
 1. Discover what security validations have been performed on third-party packages
 2. Verify the integrity and authenticity of security audit reports
 3. Make informed decisions about package integration based on transparent audit results
 4. Establish trust without performing redundant security validations
+5. Understand version compatibility between composed applications
 
-AppProviders benefit from:
+App Providers benefit from:
 1. Clear specification of what information to provide for auditing
 2. Decentralized publication of audit results
-3. Reuse of existing audits across multiple WalletProviders
+3. Reuse of existing audits across multiple Validator Node Providers
 
 ### Component 1: Package Publication Standard
 
-#### AppProvider Git Repository Structure
+#### App Provider Git Repository Structure
 
-Each AppProvider maintains a public or private Git repository with the following structure:
+Each App Provider maintains a public or private Git repository with the following structure:
 
 ```
 app-provider-repo/
 ├── README.md
 ├── packages/
-│   ├── v1.0.0/
+│   ├── splice-amulet-0.1.16/
 │   │   ├── package.dar
 │   │   └── metadata.json
-│   ├── v1.1.0/
+│   ├── splice-util-0.1.5_5a58024e2cc488ca9e0c952ec7ef41da3a1ed0a78ba23bacd819e5b30afb5546/
 │   │   ├── package.dar
 │   │   └── metadata.json
 │   └── ...
 ├── audits.json
 └── build-configs/
-    ├── v1.0.0/
+    ├── splice-amulet-0.1.16/
     │   └── build-config.json
     └── ...
 ```
+
+**Note on Directory Naming**: Directories under `packages/` should use the full package name and version (e.g., `package-name-1.2.3`). To avoid conflicts when publishing multiple versions of the same package, an optional `_<package_hash>` suffix may be appended.
 
 #### Package Metadata Format
 
@@ -187,7 +190,7 @@ The `build-config.json` file contains reproducible build information:
 }
 ```
 
-#### AppProvider Audits Summary
+#### App Provider Audits Summary
 
 The `audits.json` file in the root directory summarizes available audits:
 
@@ -199,6 +202,10 @@ The `audits.json` file in the root directory summarizes available audits:
   "audits": [
     {
       "package_version": "1.0.0",
+      "package_hash": {
+        "algorithm": "sha256",
+        "value": "5a58024e2cc488ca9e0c952ec7ef41da3a1ed0a78ba23bacd819e5b30afb5546"
+      },
       "audit_results": [
         {
           "auditor_name": "SecurityAuditorCompany",
@@ -214,7 +221,7 @@ The `audits.json` file in the root directory summarizes available audits:
 }
 ```
 
-#### AppProvider README.md
+#### App Provider README.md
 
 The `README.md` should include a **Security Audits** section:
 
@@ -236,7 +243,7 @@ This package has been validated by the following security auditors:
 
 #### Audit Request Format
 
-When AppProviders request an audit, they provide the following information:
+When App Providers request an audit, they provide the following information:
 
 ```json
 {
@@ -282,9 +289,9 @@ When AppProviders request an audit, they provide the following information:
 
 ### Component 3: Audit Result Publication
 
-#### SecurityAuditor Repository Structure
+#### Security Auditor Repository Structure
 
-Each SecurityAuditor maintains a public Git repository with published audit results:
+Each Security Auditor maintains a public Git repository with published audit results:
 
 ```
 security-auditor-reports/
@@ -422,7 +429,7 @@ security-auditor-reports/
 }
 ```
 
-#### SecurityAuditor Index File
+#### Security Auditor Index File
 
 Each auditor maintains an `index.json` for discoverability:
 
@@ -462,18 +469,18 @@ Each auditor maintains an `index.json` for discoverability:
 }
 ```
 
-### Component 4: WalletProvider Validation Process
+### Component 4: Validator Node Provider Validation Process
 
-#### WalletProvider Verification Procedure
+#### Validator Node Provider Verification Procedure
 
-WalletProviders implement the following process before integrating a third-party package:
+Validator Node Providers implement the following process before integrating a third-party package:
 
 ```json
 {
   "schema_version": "1.0",
   "verification_process": {
     "step_1_locate_package": {
-      "description": "Find the package in AppProvider's repository",
+      "description": "Find the package in App Provider's repository",
       "checks": [
         "Package hash matches download",
         "Metadata.json is present and valid",
@@ -482,7 +489,7 @@ WalletProviders implement the following process before integrating a third-party
     },
     "step_2_gather_audits": {
       "description": "Fetch audit results from known auditors",
-      "method": "Query audits.json from AppProvider repository and fetch reports from referenced URLs"
+      "method": "Query audits.json from App Provider repository and fetch reports from referenced URLs"
     },
     "step_3_verify_audit_integrity": {
       "description": "Verify audit report signatures and validity",
@@ -514,14 +521,14 @@ WalletProviders implement the following process before integrating a third-party
 }
 ```
 
-#### WalletProvider Integration Decision Document
+#### Validator Node Provider Integration Decision Document
 
-WalletProviders maintain records of their integration decisions:
+Validator Node Providers maintain records of their integration decisions:
 
 ```json
 {
   "schema_version": "1.0",
-  "wallet_provider": "string",
+  "validator_node_provider": "string",
   "integration_decisions": [
     {
       "decision_id": "uuid-v4",
@@ -552,18 +559,18 @@ WalletProviders maintain records of their integration decisions:
 
 ## Motivation
 
-As Daml applications and wallets proliferate in the Canton ecosystem, WalletProviders face a critical challenge: how to safely integrate third-party packages while maintaining security standards. Currently:
+As Daml applications and validator nodes proliferate in the Canton ecosystem, Validator Node Providers face a critical challenge: how to safely integrate third-party packages while maintaining security standards. Currently:
 
-1. Each WalletProvider must either audit packages independently (expensive and duplicative) or trust AppProviders without verification (risky)
+1. Each Validator Node Provider must either audit packages independently (expensive and duplicative) or trust App Providers without verification (risky)
 2. Security audits lack standardization, making it difficult to compare results across different auditors
 3. There is no transparent way for audits to be discovered and verified
-4. Audit results cannot be reused across multiple WalletProviders, leading to wasted effort
+4. Audit results cannot be reused across multiple Validator Node Providers, leading to wasted effort
 
 This CIP solves these problems by establishing a transparent, standardized ecosystem where:
 
-- AppProviders clearly communicate what they're publishing and how it was built
-- SecurityAuditors can publish results in verifiable repositories
-- WalletProviders can discover and verify audits without conducting redundant validations
+- App Providers clearly communicate what they're publishing and how it was built
+- Security Auditors can publish results in verifiable repositories
+- Validator Node Providers can discover and verify audits without conducting redundant validations
 - All parties operate with cryptographic verification and transparency
 
 ## Rationale
@@ -599,7 +606,7 @@ We reject a centralized audit registry because:
 #### Why Standardized vs. Custom Formats
 
 Standardization enables:
-- **Wallet software** to parse any auditor's reports
+- **Validator node software** to parse any auditor's reports
 - **Auditors** to focus on security analysis, not format design
 - **Cross-auditor comparison** without custom integration
 - **Reduced friction** for all participants
@@ -628,9 +635,9 @@ A smart contract on Canton could store all audit results. We rejected this becau
 
 We do not require authentication on audit result URLs because:
 - All data is expected to be public
-- URLs are hard to guess (based on package hashes and identifiers)
+- Package hashes are part of the publicly available topology state
 - Authentication adds operational complexity for auditors
-- Wallet software would need credential management
+- Validator node software would need credential management
 - Decentralized auditors may not have unified authentication
 
 #### Single Standardized Audit Template
@@ -645,27 +652,27 @@ We provide flexibility in audit findings because:
 
 This is a new standard introducing no backwards compatibility concerns. All participants can adopt it incrementally:
 
-- AppProviders can begin publishing metadata without affecting existing processes
-- SecurityAuditors can start using the standard format for new audits
-- WalletProviders can adopt verification procedures at their own pace
+- App Providers can begin publishing metadata without affecting existing processes
+- Security Auditors can start using the standard format for new audits
+- Validator Node Providers can adopt verification procedures at their own pace
 
-Existing packages without audits remain usable; WalletProviders simply cannot leverage audit information for integration decisions.
+Existing packages without audits remain usable; Validator Node Providers simply cannot leverage audit information for integration decisions.
 
 ## Implementation
 
 An implementation of this standard should include:
 
-1. **AppProvider tooling**:
+1. **App Provider tooling**:
    - CLI tool to generate `metadata.json` and `build-config.json` from .dar files
    - Validation scripts to verify JSON schema compliance
    - Documentation for setting up audit requests
 
-2. **SecurityAuditor tooling**:
+2. **Security Auditor tooling**:
    - Templates for `audit-report.json` generation
    - Signature generation and verification utilities
    - Batch reporting tools for multiple packages
 
-3. **WalletProvider tooling**:
+3. **Validator Node Provider tooling**:
    - Library to fetch and verify audit reports
    - Decision engine implementing verification procedures
    - UI components for displaying audit results to users
