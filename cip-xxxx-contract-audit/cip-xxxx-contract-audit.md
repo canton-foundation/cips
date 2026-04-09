@@ -63,7 +63,7 @@ app-provider-repo/
 ├── apps/
 │   ├── canton-coin/
 │   │   ├── packages/
-│   │   │   ├── splice-amulet-0.1.16/
+│   │   │   ├── splice-amulet-0.1.16_c208d7ead1e4e9b610fc2054d0bf00716144ad444011bce0b02dcd6cd0cb8a23/
 │   │   │   │   ├── package.dar
 │   │   │   │   ├── metadata.json
 │   │   │   │   ├── audit-reports.json
@@ -86,6 +86,7 @@ app-provider-repo/
 │       │       └── build-config.json
 │       └── vetting-states/
 │           ├── mainnet.json
+│           ├── devnet.json
 │           └── testnet.json
 ```
 
@@ -672,6 +673,21 @@ This CIP solves these problems by establishing a transparent, standardized ecosy
 - Security Auditors can publish results in verifiable repositories
 - Validator Node Providers can discover and verify audits without conducting redundant validations
 - All parties operate with cryptographic verification and transparency
+
+In recent conversations between Digital Asset and wallet providers (both retail and enterprise) who host their own validator nodes, the following feedback was consistently communicated:
+
+**Security Risks and Malicious Code**
+
+Node operators are highly concerned about uploading malicious DAR files. There are two primary concerns here:
+
+1. Risk to their validator and environment: They fear potential exploits and the risk that a DAR could break their validator. 
+
+2. Risk to their end-users: unknowingly signing malicious transactions.
+Node operators also want to ensure that source code which has been vetted equates exactly to the DAR files uploaded to their nodes.
+
+**Version Control, Composability & Operational Overhead**
+There is anxiety surrounding the continual maintenance and testing required for initial DARs and subsequent new versions. Providers specifically called out "version hell", the sparse matrix of version compatibility for composability, and how dependencies are handled and enforced.
+Providers are concerned about the operational effort required to load DARs onto validators. They’d like this as automated as possible.
 
 ## Rationale
 
