@@ -107,4 +107,4 @@ Global Synchronizer CIPs
 | [cip-0111](/cip-0111/cip-0111.md) |  | Process for Reducing Super Validator Weight | Chris Zuehlke, Andrew Bryan, Alex Chen| Governance | Proposed |
 | [cip-0112](/cip-0112/cip-0112.md) |  | Canton Network Token Standard V2 - Improvements for Privacy, Performance and Traditional Accounting | Bernhard Elsner Simon Meier | Standards Track | Draft |
 | [cip-0113](/cip-0113/cip-0113.md) |  | Add Further Asset Management as a Super Validator (Weight 8.0) | Yiannis Varelas | Governance | Approved |
-| [cip-0114](/cip-0114/cip-0114.md) |  | Digital Asset Treasury (DAT) SV Program | Mark Wendland w/ Community proposal | Tokenomics | Proposed |
+| [cip-0114](/cip-0114/cip-0114.md) |  | Digital Asset Treasury (DAT) SV Program | Mark Wendland w/ Community proposal | Tokenomics | Approved |
