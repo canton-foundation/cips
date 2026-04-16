@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Verification Procedure",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "verification_process": {
+      "type": "object",
+      "properties": {
+        "step_1_locate_package": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string" },
+            "checks": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["description", "checks"]
+        },
+        "step_2_gather_audits": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string" },
+            "method": { "type": "string" }
+          },
+          "required": ["description", "method"]
+        },
+        "step_3_verify_audit_integrity": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string" },
+            "checks": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["description", "checks"]
+        },
+        "step_4_assess_audit_results": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string" },
+            "decision_matrix": { "type": "object" }
+          },
+          "required": ["description", "decision_matrix"]
+        },
+        "step_5_internal_verification": {
+          "type": "object",
+          "properties": {
+            "description": { "type": "string" },
+            "options": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["description", "options"]
+        }
+      },
+      "required": ["step_1_locate_package", "step_2_gather_audits", "step_3_verify_audit_integrity", "step_4_assess_audit_results", "step_5_internal_verification"]
+    }
+  },
+  "required": ["schema_version", "verification_process"]
+}
