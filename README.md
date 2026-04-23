@@ -104,7 +104,7 @@ Global Synchronizer CIPs
 | [cip-0108](/cip-0108/cip-0108.md) |  |Add Merkle Science’s Predictive Analytics as a Weight 1 SV | Dr. Justus Delp | Governance | Proposed |
 | [cip-0109](/cip-0109/cip-0109.md) |  | Visa Super Validator Participation | Eric Saraniecki | Governance | Approved |
 | [cip-0110](/cip-0110/cip-0110.md) |  | Add Apollo as max weight 7 SV | Yiannis Varelas | Governance | Approved |
-| [cip-0111](/cip-0111/cip-0111.md) |  | Process for Reducing Super Validator Weight | Chris Zuehlke, Andrew Bryan, Alex Chen| Governance | Approved |
+| [cip-0111](/cip-0111/cip-0111.md) |  | Process for Reducing Super Validator Weight | Chris Zuehlke, Andrew Bryan, Alex Chen| Process | Approved |
 | [cip-0112](/cip-0112/cip-0112.md) |  | Canton Network Token Standard V2 - Improvements for Privacy, Performance and Traditional Accounting | Bernhard Elsner Simon Meier | Standards Track | Draft |
 | [cip-0113](/cip-0113/cip-0113.md) |  | Add Further Asset Management as a Super Validator (Weight 8.0) | Yiannis Varelas | Governance | Approved |
 | [cip-0114](/cip-0114/cip-0114.md) |  | Digital Asset Treasury (DAT) SV Program | Mark Wendland w/ Community proposal | Tokenomics | Approved |
