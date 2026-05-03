@@ -1,6 +1,6 @@
 <pre>
   CIP: <to be assigned by editors>
-  Title: Multi-VM Settlement Pattern for Non-Canton L1 / CIP-56 Bridging
+  Title: Multi-VM CIP-56 Bridge Pattern
   Author: Hilal Agil <hilal@tenzro.com> (@hilarl)
   Status: Draft
   Type: Informational
@@ -11,48 +11,28 @@
 
 ## Abstract
 
-This CIP describes an implementation pattern by which a non-Canton Layer-1 ledger
-(hereafter "external L1") can settle holding transfers against a CIP-56-compliant
-holding contract on a Canton synchronizer through a generic, attestation-based
-cross-chain messaging layer (Wormhole NTT is used as the worked example).
+This CIP describes a deterministic two-phase commit pattern by which a
+non-Canton Layer-1 ledger (hereafter "external L1") settles holding transfers
+against a CIP-56-compliant holding contract on a Canton synchronizer through
+an attestation-based cross-chain messaging layer.
 
-The pattern composes three existing primitives — (1) a CIP-56 holding contract
-on Canton, unchanged; (2) an external-L1 lock/unlock primitive; and (3) an
-attested cross-chain message — into a deterministic two-phase commit whose
-atomicity guarantees match the weaker of the two underlying ledgers' finality
-properties. The pattern is protocol-agnostic with respect to the messaging
-layer; conformance criteria are stated in terms of message attestation,
-finality, and replay protection rather than a specific bridge.
+The pattern composes three existing primitives — (1) a CIP-56 holding
+contract on Canton, unchanged; (2) an external-L1 lock/unlock primitive; and
+(3) an attested cross-chain message — into a two-phase commit whose
+atomicity matches the weaker of the two ledgers' finality properties.
+Conformance is stated in terms of message attestation, source-finality, and
+replay protection rather than a specific bridge transport.
 
-This CIP introduces no changes to CIP-56, the DAML standard library, the Canton
-protocol, or the Global Synchronizer. It is filed as Informational and is
-intended for community review and as a reference for implementers of similar
-multi-VM bridges.
+This CIP introduces no changes to CIP-56, the DAML standard library, the
+Canton protocol, or the Global Synchronizer. It composes existing primitives
+and is filed as Informational.
 
-## Motivation
-
-CIP-56 (Canton Network Token Standard) defines holdings, transfer
-instructions, and the FOP/DvP transfer flows on Canton. It is silent on how
-parties whose primary balance lives on a non-Canton ledger participate in
-those flows. Today, implementations of "wrapped" holdings on Canton vary in:
-
-1. Where source-finality is enforced (some bridges accept latest-block source
-   state and rely on rollback windows; others wait for source-L1 finality but
-   use heterogeneous definitions of "finalized").
-2. How rollback is performed when the destination Canton transfer is rejected
-   or expires (some bridges leave source funds locked indefinitely).
-3. Whether the bridged-holding contract surfaces the source-L1 attestation as a
-   verifiable on-Canton observer, or treats the bridge custodian as an opaque
-   trusted party.
-4. How replay protection is composed across the source-L1 transaction hash, the
-   cross-chain message identifier, and the Canton command-id deduplication key.
-
-The result is that wallets and registry operators today cannot rely on a
-uniform set of properties when accepting a holding contract whose backing
-asset is bridged from an external L1. This CIP documents one composition that
-yields deterministic two-phase atomicity and explicit failure-mode handling,
-so that conformant implementations can be recognized and reasoned about
-uniformly.
+This CIP is the first in a four-part stack of contributions filed by the
+same author covering, in order: (A) the multi-VM bridge pattern specified
+here; (B) decentralized AI training and inference settlement on Canton; (C)
+agentic identity and mandate-bound payments on Canton; (D) TEE-attested
+confidential compute receipts on Canton. Each is filed as a separate CIP
+and may be reviewed independently.
 
 ## Specification
 
@@ -130,8 +110,10 @@ The mirror direction reuses the CIP-56 two-step transfer for the lock phase
 on Canton, then unlocks on the external L1 via an attested message.
 
 C1. `DP` (now acting as sender) creates a CIP-56 `TransferInstruction` with
-    `receiver = DSC` and an `extraData` field containing the external-L1
-    destination address and chain identifier.
+    `receiver = DSC`. The destination address and chain identifier are
+    carried in the instruction's `meta` field under DNS-prefixed keys:
+    `tenzro.network/bridge.dest_chain_id` (decimal string) and
+    `tenzro.network/bridge.dest_address` (hex-encoded bytes).
 C2. `DSC` accepts the instruction, archiving the source `Holding` and
     creating an internal `BridgeLocked` contract observed by `R`.
 C3. A relayer requests an attestation from `X` over the `BridgeLocked`
@@ -161,12 +143,19 @@ deterministic codec.
 | `source_lock_tx_hash`      | bytes32   | Hash of the lock transaction.                      |
 | `source_block_number`      | u64       | Block height containing the lock event.            |
 | `source_lock_nonce`        | u64       | Per-sender monotonic nonce on `SC`.                |
-| `instrument_id`            | bytes32   | CIP-56 instrument identifier (registry-defined).   |
+| `instrument_id`            | bytes32   | Hash of the CIP-56 `instrumentId` (registry-defined).|
 | `amount`                   | u128      | Holding amount in instrument's smallest unit.      |
 | `dest_synchronizer_id`     | bytes32   | Hash of the destination synchronizer ID.           |
 | `dest_party_hash`          | bytes32   | Hash of the destination CIP-56 party identifier.   |
 | `extra_payload_len`        | u32       | Length of optional `extra_payload` in bytes.       |
 | `extra_payload`            | bytes     | Opaque application data; passed through unchanged. |
+
+The `extra_payload` field above is part of the cross-chain wire format and
+is distinct from the CIP-56 `meta` field on the destination
+`TransferInstruction`. `DSC` MAY copy decoded keys from `extra_payload`
+into the destination `TransferInstruction`'s `meta` map under the
+`tenzro.network/bridge.*` namespace; doing so is not required for
+conformance but is RECOMMENDED for auditability.
 
 #### 4.2 Bridge-Refund payload
 
@@ -250,14 +239,28 @@ NTT.
 | F9 | Source-L1 censors unlock after refund  | B'    | Out of scope of this CIP; document as a residual risk in §11.            |
 | F10| Observer set on `R` not quorate        | B2    | `DSC` SHALL refuse to exercise; treat as F8.                             |
 
-### 8. Backwards compatibility
+## Motivation
 
-This CIP is Informational and does not modify CIP-56, the DAML standard
-library, or the Canton protocol. It composes existing primitives.
-Implementations of CIP-56 that do not act as `DSC` for an external L1 are
-unaffected. Implementations of CIP-56 that wish to interoperate with this
-pattern need only to register a `DSC` party and a verifying contract — they
-do not need to change the holding-template or registry interfaces.
+CIP-56 defines holdings, transfer instructions, and the FOP / DvP transfer
+flows on Canton. It is silent on participation by parties whose primary
+balance lives on a non-Canton ledger. Existing wrapped-holding
+implementations vary on:
+
+1. Where source-finality is enforced.
+2. How rollback is performed when the destination Canton transfer is
+   rejected or expires.
+3. Whether the bridged-holding contract surfaces the source-L1 attestation
+   as a verifiable on-Canton observer, or treats the bridge custodian as
+   an opaque trusted party.
+4. How replay protection composes across the source-L1 transaction hash,
+   the cross-chain message identifier, and the Canton command-id
+   deduplication key.
+
+Wallets and registry operators consequently cannot rely on a uniform set
+of properties when accepting a holding contract whose backing asset is
+bridged. This CIP documents one composition that yields deterministic
+two-phase atomicity and explicit failure-mode handling, so conformant
+implementations can be recognized and reasoned about uniformly.
 
 ## Rationale
 
@@ -306,24 +309,60 @@ event's position without changing its content. On L1s without per-sender
 nonces (e.g., UTXO chains), implementations MAY substitute the lock
 transaction's outpoint as the replay key.
 
+## Backwards compatibility
+
+This CIP introduces no changes to CIP-56, the DAML standard library, the
+Canton protocol, or the Global Synchronizer. It composes existing
+primitives. CIP-56 implementations that do not act as `DSC` for an
+external L1 are unaffected. CIP-56 implementations that wish to
+interoperate with this pattern need only register a `DSC` party and a
+verifying contract; they do not need to change the holding-template or
+registry interfaces.
+
+The reference `meta` keys defined in §3 (`tenzro.network/bridge.*`) are
+namespaced under a DNS subdomain controlled by the author per CIP-56's
+metadata key convention, and do not conflict with keys defined by other
+CIPs. Conformant `DSC` implementations operating in a different DNS
+namespace MAY define analogous keys under their own subdomain.
+
+### Forward compatibility with CIP-112 v2 packages
+
+The pattern is specified against the v1 CIP-56 packages
+(`splice-api-token-{holding,transfer-instruction}`). When a synchronizer
+upgrades to the v2 packages defined in CIP-112
+(`splice-api-token-{allocation-instruction,allocation-request,
+allocation-allocation,holding,transfer-instruction}-v2`), the same `DSC`
+flow applies: phase B's `B2` maps onto the v2 transfer-instruction
+factory, and `B3` onto the v2 acceptance choice. The wire schema in §3
+and the conformance properties in §6 are unchanged across the v1 → v2
+package transition.
+
 ## Reference implementation
 
-A Rust reference implementation is available at
-[`tenzro/tenzro-network`](https://github.com/tenzro/tenzro-network), specifically:
+The pattern is implemented and operating on the Tenzro Network testnet,
+which composes the EVM, SVM, and DAML runtimes against a single `DSC`
+adapter targeting a CIP-56 holding template. Live endpoints:
 
-- `crates/tenzro-bridge/src/canton.rs` — Canton-side adapter using the
-  Canton 3.x JSON Ledger API v2 (`/v2/commands/submit-and-wait-for-transaction`)
-  to drive `DSC` exercises.
-- `crates/tenzro-bridge/src/wormhole.rs` — Wormhole adapter implementing the
-  attestation-emit and attestation-verify paths.
-- `crates/tenzro-vm/src/daml/cip56.rs` — CIP-56 holding template adapter
-  used as the worked example of `DSC`'s holding-creation choice.
+- JSON-RPC: `https://rpc.tenzro.network`
+- Web API: `https://api.tenzro.network`
+- Canton MCP: `https://canton-mcp.tenzro.network/mcp`
+- LayerZero MCP: `https://layerzero-mcp.tenzro.network/mcp`
+- Chainlink MCP: `https://chainlink-mcp.tenzro.network/mcp`
 
-This is one reference implementation; conformance is defined in §2-§7 above
-and not by the specifics of the Tenzro implementation. In particular,
-implementers SHOULD NOT depend on Tenzro's choice of party-to-address
-mapping (`SHA-256("tenzro-daml-party:" || party)`) or its 18-decimal
-amount precision; both are permissible local choices.
+Source: [`tenzro/tenzro-network`](https://github.com/tenzro/tenzro-network).
+
+| Component | Path | Role |
+|---|---|---|
+| Canton adapter | `crates/tenzro-bridge/src/canton.rs` | `DSC` drive via Canton 3.4+ JSON Ledger API v2 (`/v2/commands/submit-and-wait-for-transaction`). |
+| Wormhole adapter | `crates/tenzro-bridge/src/wormhole.rs` | Attestation emit/verify paths over Wormhole NTT. |
+| CIP-56 holding | `crates/tenzro-vm/src/daml/cip56.rs` | Worked example of `DSC`'s holding-creation choice and the `meta`-map population for the bridge keys defined in §3. |
+| Bridge router | `crates/tenzro-bridge/src/router.rs` | Strategy selection (cost / speed / availability) across LayerZero V2, Chainlink CCIP, deBridge DLN, Li.Fi, Wormhole NTT, and Canton. |
+
+Conformance is defined by §2-§7 and is independent of the implementation
+above. In particular, implementers SHOULD NOT depend on Tenzro's choice
+of party-to-address mapping
+(`SHA-256("tenzro-daml-party:" || party)`) or its 18-decimal amount
+precision; both are permissible local choices.
 
 ## Security considerations
 
