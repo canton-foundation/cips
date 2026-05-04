@@ -386,7 +386,7 @@ The main challenge we see with multi-issuer, multi-registry name resolution is a
 
 There are many systems that associate names with entities. In particular, DNS names and email addresses are well-known and widely used to identify counter-parties. In contrast to CNS 1.0, these systems have their authoritative data source off-ledger. Thus we cannot expect that statements about party-to-name associations in these systems can be resolved directly on-ledger.
 
-However, we do want to support imports of statements in the form "I <issuer> have verified that the entity controlling party <p> also controls name <n> in system <S>". We can represent this using credentials issued by `issuer` for holder `p` with a claim:
+However, we do want to support imports of statements in the form "I \<issuer> have verified that the entity controlling party \<p> also controls name \<n> in system \<S>". We can represent this using credentials issued by `issuer` for holder `p` with a claim:
 
 ```text
 (property="identity.<S>", subject="<n>", value="<p>")
