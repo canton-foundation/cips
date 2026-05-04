@@ -5,7 +5,7 @@
   Author:
     Simon Meier
   License: CC0-1.0
-  Status: Draft
+  Status: Early Draft (comment threads at the bottom of this doc, and inlined TODO notes)
   Type: Standards Track
   Created: 2026-01-09
 </pre>
