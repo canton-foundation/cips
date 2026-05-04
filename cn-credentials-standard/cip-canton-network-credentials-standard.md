@@ -45,7 +45,7 @@ Another example is an identity verification service that acts both as a credenti
 
 The following diagram shows how the APIs defined in this CIP mediate the interaction between the apps in the different roles. Arrows point from clients to servers of APIs.
 
-TODO: add _Diagram omitted in this markdown export._
+![](images/credentials_lifecycle.png)
 
 As we can see, the APIs cover exactly the interaction between the different kinds of apps and credential registries. Credential holders use custom APIs and UIs to interact with credential issuers. App users are not shown in the diagram as they do not directly interact with any of the APIs standardized in this CIP. They rely on the app provider making suitable choices with respect to how to use the standardized APIs to make use of credentials in the apps UIs and on-ledger workflows.
 
