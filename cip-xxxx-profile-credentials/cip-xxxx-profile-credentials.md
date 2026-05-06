@@ -12,16 +12,15 @@ Type: Standards Track
 
 This CIP standardizes a portable representation of **party profile
 metadata** for user‑interface rendering on the Canton Network based on
-the **Canton Network Credentials Standard**.
+the [**Canton Network Credentials Standard**](https://github.com/canton-foundation/cips/pull/204).
 
 It defines:
 
 -   A set of **standard claim keys** for common party metadata such as
     display name, avatar, website, and optional contact/social
     information.
--   An **application-side resolution method** for deriving a single
-    effective party profile from credentials issued across multiple
-    registries and issuers.
+-   A clear **application-side interpretation model** for rendering these
+    claims consistently in user interfaces.
 
 The profile claims defined by this CIP are **informational only** and
 **MUST NOT** be interpreted as verified identity attributes or used for
@@ -48,7 +47,7 @@ This CIP introduces a **standardized profile metadata model** that
 allows:
 
 -   party owners to publish profile information
--   applications to resolve party profiles consistently
+-   applications to interpret profile claims consistently
 -   users to distinguish parties in wallets, explorers, and applications
 
 This improves **user experience and interoperability across Canton
@@ -67,6 +66,11 @@ namespace:
 Where `<nr>` will be replaced by the assigned CIP number.
 
 # Party Profile Claim Keys
+
+For social fields, this CIP uses grouped claim keys (for example,
+`cip-<nr>/social:discord`) to align naming conventions with
+[CPRP (CIP PR #171)](https://github.com/canton-foundation/cips/pull/171)-style
+field organization while keeping this CIP namespace prefix.
 
 ## `cip-<nr>/displayName`
 
@@ -88,8 +92,8 @@ Applications:
 
 -   MUST treat the value as a reference to an avatar resource
 -   MUST NOT interpret the value as identity verification
--   SHOULD support `https://` URLs
--   SHOULD support `ipfs://` URIs
+-   SHOULD be a URI conforming to RFC 3986
+-   SHOULD support `https://` URLs and `ipfs://` URIs
 -   MAY ignore values that are not valid or supported URIs
 
 ## `cip-<nr>/website`
@@ -100,7 +104,7 @@ Applications:
 
 -   MUST treat the value as informational metadata
 -   MUST NOT treat it as an authoritative identifier
--   SHOULD expect an `https://` URL
+-   SHOULD be an absolute `https://` URL conforming to RFC 3986
 -   MAY display invalid URLs as plain text
 -   MUST NOT treat invalid values as trusted links
 
@@ -112,102 +116,63 @@ Applications:
 
 -   MUST treat this value as informational metadata
 -   MUST NOT assume ownership or verification
+-   SHOULD conform to RFC 5322 `addr-spec` syntax
 -   MAY perform basic email validation
 -   MAY render a `mailto:` link
 
-## `cip-<nr>/telegram`
+## `cip-<nr>/social:telegram`
 
 Telegram handle.
 
 Applications:
 
 -   MUST treat the value as a Telegram username
+-   SHOULD conform to Telegram username format rules
 -   SHOULD store the value **without `@` prefix**
 -   MAY render the handle with a leading `@`
 
-## `cip-<nr>/x`
+## `cip-<nr>/social:x`
 
 X (Twitter) handle.
 
 Applications:
 
 -   MUST treat the value as an X username
+-   SHOULD conform to X username format rules
 -   SHOULD store it without a leading `@`
 -   MAY render it with `@`
 
-## `cip-<nr>/github`
+## `cip-<nr>/social:github`
 
 GitHub username or organization.
 
 Applications:
 
 -   MUST treat the value as informational metadata
+-   SHOULD conform to GitHub username or organization name format rules
 -   MAY link to a GitHub profile URL
 
-## `cip-<nr>/discord`
+## `cip-<nr>/social:discord`
 
 Discord handle or user ID.
 
 Applications:
 
 -   MUST treat the value as informational metadata
+-   SHOULD conform to Discord username or user ID format rules
 -   MAY display the value as provided
 
 # Party Profile Resolution
 
-Applications may obtain profile credentials for a party **P** from
-multiple registries and issuers.
+This CIP does not standardize a full cross-registry/cross-issuer profile
+composition algorithm.
 
-To compute a single **effective profile**, applications use a configured
-**ordered list of sources**.
+Applications SHOULD rely on the resolution/composition flow defined in
+[CPRP (CIP PR #171)](https://github.com/canton-foundation/cips/pull/171)
+and apply this CIP only for:
 
-A source is defined as:
-
-`(registry, issuer)`
-
-Issuer may be:
-
--   a specific issuer party ID
--   `self` (meaning issuer = holder party)
-
-## Resolution Algorithm
-
-### Step 1 --- Fetch credentials per source
-
-For each source in priority order:
-
-Fetch active credentials where:
-
-`holder = P` `issuer = resolved issuer`
-
-Only claims within the namespace `cip-<nr>/` are considered.
-
-### Step 2 --- Resolve duplicates within a source
-
-If multiple credentials from the same source define the same claim key:
-
--   Apply **last-write-wins semantics**
--   Use the registry record timestamp to determine ordering
-
-### Step 3 --- Merge sources
-
-Construct the final profile **claim-by-claim**.
-
-For each claim key:
-
-1.  Select the value from the **highest-priority source** that provides
-    it
-2.  Use lower-priority sources only when higher-priority ones do not
-    define the key
-
-### Output
-
-The result is an **effective profile map**:
-
-`profileClaimKey → (value, registry, issuer)`
-
-Applications MAY expose `(registry, issuer)` metadata in UI to show
-claim provenance.
+-   profile claim key names under `cip-<nr>/...`
+-   per-key interpretation semantics for UI rendering
 
 # Rationale
 
@@ -225,76 +190,64 @@ Using namespaced keys `cip-<nr>/*`:
 -   enables efficient querying
 -   allows extensibility
 
-Future profile attributes can be added under the same namespace.
+Future well-known profile attributes may be standardized via amendments
+to this CIP (or a separate CIP where appropriate) while continuing to
+use the `cip-<nr>/` namespace.
+
+This namespace design is primarily for forward compatibility:
+applications may ignore unrecognized keys without breaking.
 
 ## Why Application-Side Resolution
 
 Different applications may have different trust policies, issuer
 preferences, and registry priorities.
 
-This CIP standardizes:
+Therefore this CIP standardizes only:
 
 -   claim namespace
--   resolution semantics
+-   claim interpretation semantics
 
 but leaves configurable:
 
+-   resolution/composition method
 -   registry selection
 -   issuer trust
 -   source priority ordering
 
-## Self-Published Profiles
-
-Self-published profiles provide a universal baseline.
-
-Applications may support the issuer alias:
-
-`self`
-
-which resolves to:
-
-`issuer = holder party`
-
-A common default configuration is:
-
-`[(dsoRegistry, self)]`
-
 # Examples
 
-## Example 1 --- Self-Published Profile
+## Example 1 --- Basic Profile Claims
 
-Holder party:
+A credential contains:
 
-`P`
+-   `cip-<nr>/displayName = "PixelPlex"`
+-   `cip-<nr>/avatar = "https://cdn.example.com/profiles/pixelplex.png"`
+-   `cip-<nr>/website = "https://pixelplex.io"`
+-   `cip-<nr>/email = "info@pixelplex.io"`
+-   `cip-<nr>/social:github = "pixelplex"`
 
-Source list:
+Applications should render these values as profile metadata only and
+must not treat them as authoritative identity identifiers.
 
-`[(dsoRegistry, self)]`
+## Example 2 --- Social Handle Rendering
 
-Profile is derived entirely from credentials where:
+A credential contains:
 
-`holder = P` `issuer = P`
+-   `cip-<nr>/social:telegram = "Pixelplex"`
+-   `cip-<nr>/social:x = "pixelplexinc"`
 
-## Example 2 --- Preferred Issuer with Fallback
+Applications may render these in UI as `@Pixelplex` and
+`@pixelplexinc`
+while storing/interpreting the claim values without the leading `@`.
 
-Sources:
+## Example 3 --- Invalid Website Value
 
-`[(dsoRegistry, Ipreferred), (dsoRegistry, self)]`
+A credential contains:
 
-Preferred issuer values are used when available, otherwise fallback to
-self-published values.
+-   `cip-<nr>/website = "not-a-url"`
 
-## Example 3 --- Multiple Registries
-
-Sources:
-
-`[(registryA, Ipreferred), (registryB, Ipreferred), (registryA, self)]`
-
-Resolution priority:
-
-1.  registryA preferred issuer
-2.  registryB preferred issuer
-3.  registryA self
+Applications may display this value as plain text but must not treat it
+as a trusted link.
 
 # Backwards Compatibility
 
