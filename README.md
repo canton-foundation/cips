@@ -109,3 +109,4 @@ Global Synchronizer CIPs
 | [cip-0113](/cip-0113/cip-0113.md) |  | Add Further Asset Management as a Super Validator (Weight 8.0) | Yiannis Varelas | Governance | Approved |
 | [cip-0114](/cip-0114/cip-0114.md) |  | Digital Asset Treasury (DAT) SV Program | Mark Wendland w/ Community proposal | Tokenomics | Approved |
 | [cip-0115](/cip-0115/cip-0115.md) |  | Add Societe Generale as a Super Validator (max weight 8) | Salim Nemouchi | Governance | Approved |
+| [cip-0116](/cip-0116/cip-0116.md) |  | Featured App Staking | Eric Saraniecki | Tokenomics | Proposed |
