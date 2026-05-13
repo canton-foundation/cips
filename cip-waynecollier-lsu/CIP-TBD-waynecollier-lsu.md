@@ -43,10 +43,9 @@ LSU removes this halt-and-restore pattern:
    - **New protocol version**: the target protocol version (e.g., "35").
 
    
-
 4. **Successor node deployment (SVs only).** SVs deploy successor sequencer, mediator, and ordering nodes alongside their existing nodes. The Validator *is not* redeployed, because it is tied to the logical synchronizer identity and persists across upgrades. SVs configure `synchronizers.successor` in their SV and scan Helm charts. This must be done before the topology freeze time. Announcement of the successor happens after the topology freeze time, once the topology state has been imported into the new node.  
      
-5. **Topology freeze and state transfer.** At the freeze time, each SV's automation publishes an `LsuAnnouncement` topology transaction. This freezes non-upgrade topology changes and identifies the successor synchronizer. Each SV's automation then exports topology and identity state from the current nodes, initializes the successor nodes from that state, and publishes `LsuSequencerConnectionSuccessor` topology transactions containing the new sequencer endpoints.  
+5. **Topology freeze and state transfer.** At the freeze time, each SV's automation publishes an `LsuAnnouncement` topology transaction. This freezes non-upgrade topology changes and identifies the successor synchronizer. Each SV's automation then exports topology and identity state from the current nodes, initializes the successor nodes from that state, and publishes `LsuSequencerConnectionSuccessor` topology transactions containing the new sequencer endpoints. For the first LSU, in June 2026, **the topology freeze will begin 24 hours before the upgrade itself.** 
      
 6. **Health verification.** Between the freeze time and upgrade time, SV automation sends periodic health check events on the successor synchronizer. SVs monitor the "LSU Sequencing Test" dashboard to confirm that every SV can sequence on the successor and that BFT peer connections are healthy.  
      
