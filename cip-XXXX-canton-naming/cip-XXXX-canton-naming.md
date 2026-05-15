@@ -15,7 +15,7 @@
 
 This CIP defines **Canton Naming**, a registry for human-readable `.canton` names on the Canton Network. Names like `alice.canton` resolve on-chain to Canton parties, providing a single source of truth for identity and discovery across decentralised applications.
 
-The protocol is designed up-front to be decentralised, where a pool of registrars can each sell name records to their end users but have them backed by a shared, centralised registry on-chain.
+The protocol is designed up-front to be decentralised, where a pool of registrars can each sell name records to their end users but have them backed by a shared, logically centralised registry on-chain.
 
 We believe that this is key to having a naming service be a value-add on the network, as names are only useful to end users if they can be relied upon to resolve to the same party. 
 
