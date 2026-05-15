@@ -19,7 +19,7 @@ The protocol is designed up-front to be decentralised, where a pool of registrar
 
 We believe that this is key to having a naming service be a value-add on the network, as names are only useful to end users if they can be relied upon to resolve to the same party. 
 
-The collective pool of registrars will operate a shared party, the "Decentralised Registry Operator" (DRO, modelled on the DSO — the Decentralised Synchroniser Operator party that operates the Global Synchronizer). This will allow for all records to be created by a single party and means that we have a single maintainer of the contract keys used on-chain regardless of who has registered a given name.
+The collective pool of registrars will operate a shared party, the "Decentralised Registry Operations party" (DRO, modelled on the DSO — the Decentralised Synchroniser Operations party that operates the Global Synchronizer). This will allow for all records to be created by a single party and means that we have a single maintainer of the contract keys used on-chain regardless of who has registered a given name.
 
 Governance of the service is managed by consensus among the approved registrars. Parameters of the service (like min pricing, vote thresholds etc) can be agreed upon by the governance layer and then are stored in the Name Registry contract itself. Registrars compete to provide name sales, renewals, and support to end users, but every name they sell is recorded in the same canonical `NameRegistry` contract. 
 
