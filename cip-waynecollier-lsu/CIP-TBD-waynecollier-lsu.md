@@ -8,7 +8,7 @@
 |  |  |
 | **License** | CC-1.0 |
 | **Status** | Draft |
-| **Type** | Standards |
+| **Type** | Standards Track |
 | **Created** | 2026-04-28 |
 
 ## Abstract
