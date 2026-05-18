@@ -106,12 +106,12 @@ Then, at the scheduled topology freeze time, the automated LSU procedure begins.
 
 [Daml models from 0.6.2](https://docs.dev.sync.global/release_notes.html) become effective on **2026-06-02**
 
-Logical Synchronizer Upgrade Date: **2026-06-17**
+Logical Synchronizer Upgrade Date: **2026-06-20**
 
 Minimum Allowed Splice version: 0.6.4
 
-* Set topologyFreezeTime to 2026-06-16T13:00:00Z  
-* Set upgradeTime to 2026-06-17T13:00:00Z  
+* Set topologyFreezeTime to 2026-06-19T13:00:00Z  
+* Set upgradeTime to 2026-06-20T13:00:00Z  
 * Set newPhysicalSynchronizerSerial to 5  
 * Set newPhysicalSynchronizerProtocolVersion to "35"
 
