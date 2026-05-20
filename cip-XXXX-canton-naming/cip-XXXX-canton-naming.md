@@ -62,7 +62,6 @@ A higher-level walk-through of the system — the UX, the economic model, and th
 - **Register a name** — signed by a facilitating registrar and the end-user holder. Users transfer funds from their wallet directly. The facilitating registrar takes a fee, with a remaining percentage going to the treasury (which provides a share of the fee to all whitelisted registrars, to cover the cost of governance operations). Name records are created as their own contract which itself implements CIP-56 and RegistryV1.Credentials interfaces
 - **Renew** — `UpdateCredentials` extends an existing record, signed by the holder and the DRO.
 - **Transfer** — supported via the CIP-56 standard.
-- **Sale** — registrars can facilitate a sale, which again leans on the CIP-56 interfaces.
 - **Expired names** — registrars can archive an expired record and reissue it to a new holder. This is not gated — any whitelisted registrar can do this. There's no vendor lock-in.
 
 ### Governance flows
@@ -70,7 +69,7 @@ A higher-level walk-through of the system — the UX, the economic model, and th
 There are a couple of "emergency brakes" on the system:
 
 - A whitelisted registrar can raise a dispute against a record. A disputed record can be archived by a k-of-n signing from the DRO, which constitutes a vote.
-- Any registrar can pause the registry if needed. Pausing freezes the registry's whole write surface — new registrations, transfers, allocations, and renewals. Unpausing requires a 2/3 registrar governance vote (`GA_Unpause`).
+- Any registrar can pause the registry if needed. Pausing freezes the registry's whole write surface — new registrations, transfers, and renewals. Unpausing requires a 2/3 registrar governance vote (`GA_Unpause`).
 
 Abuse of these is left to governance policy, agreed between the registrars themselves (TBD). They should be treated like "break glass" mechanisms — not expected to be used in normal operation of the system.
 
@@ -102,7 +101,7 @@ Individual companies can be onboarded as a registrar. Since they're hosting the 
 - Host the DRO
 - Have their own registrar party added as an approved (whitelisted) registrar
 
-The registrar can then facilitate registration / renewal / sale for end users. Facilitating registrars can take X percent of the fee for registration — they're competing on the UX of their product itself.
+The registrar can then facilitate registration / renewal for end users. Facilitating registrars can take X percent of the fee for registration — they're competing on the UX of their product itself.
 
 Other registrars (since they're required to run the DRO) also get a fee share on registrations. The flow:
 
@@ -198,11 +197,11 @@ Names can be transferred either in the case of:
 ```
 Holder exercises RequestNameTransfer on NameRegistry (CIP-56 TransferFactory_Transfer)
   -> assertMsg "Registry is paused" (not paused)
-  -> fetchByKey NameRecord; assert sender == holder, null disputes, not locked, not expired
+  -> fetchByKey NameRecord; assert sender == holder, null disputes, not expired
   -> create NameTransferInstruction (pending; the NameRecord stays live)
     |
 Receiver exercises AcceptNameTransfer on the instruction (CIP-56 TransferInstruction_Accept)
-  -> re-check holder / disputes / lock / expiry
+  -> re-check holder / disputes / expiry
   -> Archive old NameRecord -> Create new NameRecord (holder = receiver)
 ```
 The two-step instruct/accept handshake binds both parties' consent. Either side
@@ -331,10 +330,10 @@ template NameRegistry
 | Choice | Controller | Description |
 |--------|-----------|-------------|
 | `RegisterName` | registrar, holder | Validates name format (`isValidName`); serializes concurrent registrations by consuming the name's `RegistrarShard` and then checking `lookupByKey`; enforces `paymentAmount >= minPriceFloor`; collects the holder-funded fee as two `TransferFactory` transfers — holder to registrar (commission) and holder to DRO treasury (remainder). Creates a NameRecord that is live immediately. Holder co-controller provides signatory authority for NameRecord creation |
-| `RequestNameTransfer` | sender (current holder) | CIP-56 `TransferFactory_Transfer` — produces a pending `NameTransferInstruction`. The receiver completes the transfer via `AcceptNameTransfer`. Rejected if paused, the name is locked, or it has active disputes |
+| `RequestNameTransfer` | sender (current holder) | CIP-56 `TransferFactory_Transfer` — produces a pending `NameTransferInstruction`. The receiver completes the transfer via `AcceptNameTransfer`. Rejected if paused or if the name has active disputes |
 | `TransferWithoutApproval` | claimingRegistrar, newHolder | Reclaim expired name without holder consent. newHolder co-controller provides signatory authority for new NameRecord creation. Asserts expired and no active disputes |
 | `ResolveName` | resolver | Read-only lookup via `fetchByKey`, returns (holder, expiry). Asserts not expired |
-| `Pause` | any allowlisted registrar | Emergency kill switch: sets `paused = True`, freezing `RegisterName`, expired-name reclaim, and transfer/allocation requests. Any single allowlisted registrar can pause; unpausing requires a 2/3 governance vote (`GA_Unpause`) — easy to raise the alarm, hard to silence it |
+| `Pause` | any allowlisted registrar | Emergency kill switch: sets `paused = True`, freezing `RegisterName`, expired-name reclaim, and transfer requests. Any single allowlisted registrar can pause; unpausing requires a 2/3 governance vote (`GA_Unpause`) — easy to raise the alarm, hard to silence it |
 
 The name-operation choices are **nonconsuming** — the registry persists across operations. `Pause` and governance changes (add/remove registrar, update fees, `GA_Unpause`) go through choices that archive and re-create the registry.
 
@@ -355,9 +354,7 @@ template NameRecord
 
 **Lifecycle:** registered (live) -> archived (expired, voluntarily released, or dispute-won)
 
-**Fields:** `dro`, `holder`, `name`, `registeredAt`, `expiresAt`, `disputes : [(Party, Text)]`, `locked : Bool`
-
-`locked` is the escrow flag: while `True` the name is committed as the delivery leg of a pending settlement and the transfer/renewal choices reject. It is also surfaced as the CIP-56 `Holding` lock (see *Interface implementation*).
+**Fields:** `dro`, `holder`, `name`, `registeredAt`, `expiresAt`, `disputes : [(Party, Text)]`
 
 **Choices:**
 
@@ -367,7 +364,7 @@ template NameRecord
 | `ResolveDispute` | dro | Dismiss a dispute — drops the named disputer from the `disputes` list. Under the k-of-n DRO, the threshold signature is the resolution |
 | `Credential_ArchiveAsHolder` | holder | Voluntarily archive (burn) the name. Choice name aligns with `Credential` interface |
 | `Release` | holder | **Transitional** template-level alias for `Credential_ArchiveAsHolder` — same body, same controller. Present only because the current test/client path cannot dispatch the interface choice via a template contract id; once that path is wired through, `Release` will be removed. |
-| `NameRecord_Archive` | dro | Guarded archive choice. Takes `ArchiveReason`: `AR_Expired` (name expired) or `AR_DisputeWon` (an upheld dispute, carrying an audit `reason`). Each reason is validated inline — no unguarded DRO archive path exists. Whatever the reason, the choice first cancels any `NameAllocation` the name was escrowed in (the caller supplies its cid exactly when the record is `locked`), so archiving an escrowed name can never orphan its allocation. Holder-instructed transfers archive the record directly inside `AcceptNameTransfer`, not via this choice. |
+| `NameRecord_Archive` | dro | Guarded archive choice. Takes `ArchiveReason`: `AR_Expired` (name expired) or `AR_DisputeWon` (an upheld dispute, carrying an audit `reason`). Each reason is validated inline — no unguarded DRO archive path exists. Holder-instructed transfers archive the record directly inside `AcceptNameTransfer`, not via this choice. |
 
 **Interface implementations:** `NameRecord` implements two CIP-aligned
 interfaces. (1) `Splice.Api.Credential.RegistryV1.Credential` — the upstream
@@ -376,7 +373,7 @@ interfaces. (1) `Splice.Api.Credential.RegistryV1.Credential` — the upstream
 (validates `expectedAdmin`). (2) `Splice.Api.Token.HoldingV1.Holding` — each
 name is a 1-of-1 CIP-56 token (`InstrumentId { admin = dro, id = name }`,
 `amount = 1.0`), so any CIP-56-aware wallet or explorer displays a holder's
-`.canton` names natively. The `Holding` lock reflects `NameRecord.locked`.
+`.canton` names natively.
 
 #### NameTransferInstruction
 
@@ -434,26 +431,6 @@ The `Treasury` contract holds the **payout rules** for the accrued registration 
 
 `Treasury_Payout` distributes the accrued treasury — the Canton Coin the DRO party holds from each `RegisterName` fee — evenly across the registrars, as one batched, chained sequence of `TransferFactory_Transfer` calls. Any registrar may trigger it once `minPayoutInterval` has elapsed; the triggering registrar keeps `triggerBountyPercent` of the payout as the incentive to run it. The DRO signature on the contract gates the *rules* — the interval, the even split, the bounty — not the caller, which is why the choice is safe to leave open to any registrar.
 
-#### Marketplace — NameListing and NameSale
-
-The marketplace layer composes the core `NameRecord` with the CIP-56 Allocation API to give the holder a hosted-but-permissionless way to sell a `.canton` name. A `NameListing` is the seller's standing offer; a registrar brokers it to a buyer, producing a `NameSale`; the facilitator then settles the sale atomically against three CIP-56 `Allocation` legs — the name itself, the buyer's payment, and the facilitator's fee.
-
-**Fields and signatories.** `NameListing` is `signatory seller, observer registrars` — it is an off-book advert by the holder, not a registry-issued artefact, so no DRO signature is needed to publish or withdraw it. `NameSale` is `signatory seller, buyer, observer facilitator` — the buyer commits on accept, and the facilitator (settlement executor) observes for the settlement choice. The buyer-driven `NameListing_Accept` (`controller facilitator, buyer`) is where the holder's listing is committed into a sale; seller authority flows in through the listing's own signatory.
-
-**Where DRO authority enters settlement.** Settling the name leg archives the seller's `NameRecord` and creates a fresh one for the buyer — both effects require DRO authority because `NameRecord` is `signatory dro, holder`. That authority is supplied by the name-leg `NameAllocation` (`signatory dro, sender`), which the seller produces by exercising `RequestNameAllocation` on the registry: the exercise happens on contracts where DRO is already a signatory, so DRO authority is captured at allocation time and carried through to settlement. No fresh DRO signature is needed at listing or at sale creation; the keep-DRO-out-of-routine-actions property of an ordinary marketplace is preserved end to end.
-
-**Atomic three-leg DvP.** `NameSale_Settle` (`controller facilitator`) takes the three Allocation `ContractId`s and executes them in one transaction — either all three settle or the transaction rolls back. Before execution, the choice validates each leg against the sale's agreed terms: sender, receiver, amount, instrument id, settlement executor, and settlement reference must all match. These pinning asserts close a substitution attack where a colluding facilitator might pair the buyer's payment with a name leg for a different (cheaper) name, or with a payment leg denominated in a worthless token.
-
-**Unwind paths.** Either party may walk away from a committed sale before settlement (`NameSale_Abort` / `NameSale_AbortBySeller`); the seller's name-leg escrow is released through the standard Allocation API (`WithdrawNameAllocation` or `CancelNameAllocation`), which restores `NameRecord.locked = False`. A listing that has not yet been accepted is withdrawn with `NameListing_Cancel`.
-
-#### Name-addressed escrow — NameEscrow
-
-`NameEscrow` lets a sender lock Canton Coin against a `.canton` *name* rather than a party id, with the recipient resolved on-chain at claim time. If `alice.canton` changes hands while the escrow is in flight, the new holder receives the funds; resolution always happens at the moment `Claim` is exercised, not at escrow creation.
-
-**Signatories.** `NameEscrow` is `signatory sender, observer dro`. The sender consents to locking funds by signing; DRO is an observer so it can drive the `Claim` choice without needing a signature at escrow creation. Daml permits a controller to be an observer (the idiomatic shape for "actor outside the signatory set drives a choice", used by the CIP-56 TransferFactory as well), so the DRO ceremony is concentrated where it is doing real work — at claim time, resolving the name and releasing the locked CC — and opening an escrow is a single-signer action on the sender's side.
-
-**Lifecycle and windows.** Before `unlockAt` the sender can cancel (escrow has not matured). Between `unlockAt` and `reclaimAfter` is the DRO's exclusive `Claim` window, during which the registry's `ResolveName` choice maps the name to its current holder and releases the funds. At or after `reclaimAfter` the sender can reclaim the funds if DRO did not act in its window. `ResolveName` itself rejects expired or unknown names, so a `Claim` against a dead name fails — the sender's reclaim path handles that case.
-
 ### Security design
 
 #### Signatory model and authorisation boundaries
@@ -467,9 +444,6 @@ Every contract has explicit signatories that the DAML ledger enforces at the aut
 | NameTransferInstruction | `dro, transfer.sender` | The current holder (sender) instructs the transfer; the receiver accepts |
 | GovernanceProposal | `dro, proposer` | Proposer identified; registrars are observers who vote |
 | Treasury | `dro` | Holds the payout rules; registrars observe and may trigger `Treasury_Payout` |
-| NameListing | `seller` | Off-book advert by the holder; registrars observe to broker. No DRO at listing time |
-| NameSale | `seller, buyer` | Buyer-committed agreement; facilitator observes to settle. DRO authority for settlement flows in via the name-leg `NameAllocation`, not via NameSale itself |
-| NameEscrow | `sender` (observer: `dro`) | Sender locks the funds; DRO drives `Claim` as an observer-controller. The DRO ceremony is at claim time, not at escrow creation |
 
 The holder **is a co-signatory** on NameRecord (`signatory dro, holder`). This aligns with the upstream Credential interface (`signatory issuer, holder`). Holder authority flows into the create via `RegisterName` (where holder is a co-controller) and `AcceptNameTransfer` (where the receiver is the controller and the sender co-signs the `NameTransferInstruction`). The `NameRecord_Archive` choice (`controller dro`) is guarded by `ArchiveReason` — each archive path validates its precondition inline (expired, or dispute won). No unguarded DRO archive path exists.
 
@@ -490,9 +464,6 @@ The k-of-n DRO signs a small set of foundational contracts — `NameRegistry`, t
 | Request a transfer | `RequestNameTransfer` on `NameRegistry` | sender | `NameRegistry` signatory | — |
 | Accept / reject / withdraw a transfer | choices on `NameTransferInstruction` | receiver / sender | `NameTransferInstruction` signatory | — |
 | Force-reclaim an expired-and-unrenewed name | `TransferWithoutApproval` on `NameRegistry` | registrar + newHolder | `NameRegistry` signatory | — |
-| Sell a name: list, accept, settle | `NameListing`, `NameListing_Accept`, `NameSale_Settle` | seller / facilitator+buyer / facilitator | `NameAllocation` signatory at settle | — |
-| Allocation lifecycle: request, execute, withdraw, cancel | `RequestNameAllocation`, `Allocation_ExecuteTransfer`, `WithdrawNameAllocation`, `CancelNameAllocation` | sender / executor | `NameRegistry` / `NameAllocation` signatory | — |
-| Open / cancel a name-addressed CC escrow | `createCmd NameEscrow`, `Cancel` | sender | none — escrow is not DRO-signed | — |
 | **Registry operations** | | | | |
 | Pause the registry | `Pause` on `NameRegistry` | any registrar | `NameRegistry` signatory | — |
 | Trigger a treasury payout | `Treasury_Payout` on `Treasury` | any registrar | `Treasury` signatory | — |
@@ -503,8 +474,6 @@ The k-of-n DRO signs a small set of foundational contracts — `NameRegistry`, t
 | Resolve a dispute — uphold | `NameRecord_Archive` + `AR_DisputeWon` | DRO | Direct controller | ✅ per action |
 | Resolve a dispute — dismiss | `ResolveDispute` on `NameRecord` | DRO | Direct controller | ✅ per action |
 | Archive an expired name | `NameRecord_Archive` + `AR_Expired` | DRO | Direct controller | ✅ per action |
-| Claim a name-addressed escrow | `Claim` on `NameEscrow` | DRO | Direct controller | ✅ per action |
-| Reclaim a cancelled allocation | `Allocation_ReclaimCancel` | DRO | Direct controller | ✅ per action |
 
 The bottom group is the entire surface that routes through the k-of-n coordinator — and is exactly the surface the demo's *Ceremony view* renders. Everything else is an ordinary submission to the JSON Ledger API.
 
@@ -519,7 +488,7 @@ DAML's consuming choices provide structural replay prevention:
 
 #### Emergency pause
 
-Any single allowlisted registrar can call `Pause`, immediately setting `NameRegistry.paused = True`. While paused, the registry's name-creation and transfer/allocation choices — `RegisterName`, `TransferWithoutApproval`, `RequestNameTransfer`, `RequestNameAllocation`, and the `TransferFactory` / `AllocationFactory` interface flows — all reject with "Registry is paused". Read operations (`ResolveName`) and dispute handling continue. Unpausing requires a 2/3 governance vote (`GA_Unpause`): the alarm is cheap to pull and deliberate to silence, so a single compromised registrar cannot grief the registry into a permanent freeze.
+Any single allowlisted registrar can call `Pause`, immediately setting `NameRegistry.paused = True`. While paused, the registry's name-creation and transfer choices — `RegisterName`, `TransferWithoutApproval`, `RequestNameTransfer`, and the `TransferFactory` interface flow — all reject with "Registry is paused". Read operations (`ResolveName`) and dispute handling continue. Unpausing requires a 2/3 governance vote (`GA_Unpause`): the alarm is cheap to pull and deliberate to silence, so a single compromised registrar cannot grief the registry into a permanent freeze.
 
 The pause gates the registry's *gateway choices*. A direct `createCmd` of a DRO-signed contract is closed separately, by the DRO's k-of-n signing requirement (see *The DRO party*). The pause itself is an incident-response control — freezing legitimate activity so an incident can be investigated and resolved from a clean state — not an attack-prevention mechanism.
 
@@ -534,10 +503,9 @@ Critical field-match and state assertions prevent argument manipulation:
 | `paymentAmount >= minPriceFloor` | RegisterName | Below-floor pricing |
 | `isNone existing` (lookupByKey) | RegisterName | Duplicate names |
 | `sender == record.holder` | RequestNameTransfer, AcceptNameTransfer | Transferring a name the sender does not hold |
-| `not paused` | RegisterName, RequestNameTransfer, RequestNameAllocation, TransferWithoutApproval, CredentialFactory_UpdateCredentials | Operating the registry while emergency-paused |
+| `not paused` | RegisterName, RequestNameTransfer, TransferWithoutApproval, CredentialFactory_UpdateCredentials | Operating the registry while emergency-paused |
 | `voter \`notElem\` map fst votes` | GovVote | Double voting |
 | `null record.disputes` | RequestNameTransfer, AcceptNameTransfer, TransferWithoutApproval, CredentialFactory_UpdateCredentials | Movement / renewal of a name while a dispute is open |
-| `not record.locked` | RequestNameTransfer, AcceptNameTransfer, CredentialFactory_UpdateCredentials, Release, Credential_ArchiveAsHolder | Moving or holder-archiving a name escrowed in a pending settlement |
 | `record.expiresAt < now` | TransferWithoutApproval | Premature expiry reclaim |
 | `record.expiresAt > now` | ResolveName | Stale name resolution |
 | `expiry > now` | RegisterName | Registration with past expiry |
