@@ -194,8 +194,17 @@ nonconsuming choice DsoRules_CastVote : DsoRules_CastVoteResult
   controller fromOptional vote.sv castBy
   do
     requireWellformedVote config vote
-    -- bindingCid and castBy are both None (operator) or both Some (governance voter).
-    -- governance-voter path uses fetchChecked (ForOwner with dso; owner = castBy) bindingCid.
+    (effectiveVoteSv, castByParty, castByRoleVal) <- case (bindingCid, castBy) of
+      (None, None) ->
+        pure (vote.sv, vote.sv, VCR_Operator)
+      (Some cid, Some p) -> do
+        svGovernanceVoter <- fetchChecked (ForOwner with dso; owner = p) cid
+        require "Vote SV must match binding SV" (vote.sv == svGovernanceVoter.sv)
+        pure (svGovernanceVoter.sv, p, VCR_GovernanceVoter)
+      (Some _, None) ->
+        fail "`castBy` must be present when `bindingCid` is set"
+      (None, Some _) ->
+        fail "`bindingCid` must be present when `castBy` is set"
     request <- fetchChecked (ForDso with dso) requestCid
     -- action eligibility, deadline, cooldown, archive, and slot update are shared.
     now <- getTime
