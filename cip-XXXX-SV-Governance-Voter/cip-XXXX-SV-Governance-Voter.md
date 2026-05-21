@@ -25,17 +25,17 @@ This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https:/
 
 ## Specification
 
-This CIP covers the first contract slice needed for a separated SV governance-voter workflow: define the governance-voting authority model, classify Phase 1 vote actions, preserve one-vote-per-SV semantics, and submit a Daml reference implementation for maintainer review. The standalone dApp, Scan/read API packaging, wallet integration, deployment packaging, and UX hardening remain downstream work.
+This CIP covers the first contract slice needed for a separated SV governance-voter workflow: define the governance-voting authority model, classify Phase 1 vote actions, preserve one-vote-per-SV semantics, and provide a Daml reference implementation. The standalone dApp, Scan/read API packaging, wallet integration, deployment packaging, and UX hardening remain downstream work.
 
-### Review Scope
+### Scope
 
-The public review points for this CIP are:
+This CIP standardizes the following contract-level behavior:
 
 - A DSO-signed `SvGovernanceVoter` binding authorizes a governance voter to act only on governance-voter-eligible requests for the represented SV.
-- `isGovernanceVoterAction` is a hardcoded Phase 1 allowlist; new action constructors remain operator-only until deliberately reviewed.
+- `isGovernanceVoterAction` is a hardcoded Phase 1 allowlist; new action constructors remain operator-only until explicitly classified.
 - The contract change is limited to the adjacent governance-voter module, optional governance-voter arguments on existing `DsoRules` request/cast/close choices, vote attribution fields, and binding lifecycle choices.
 - Both authority paths write the represented SV's single vote slot; attribution records who signed and which binding was used, not additional weight.
-- The contract surface is compatible with explicit-disclosure submission by a governance voter and leaves production read/API packaging to downstream review.
+- The contract surface is compatible with explicit-disclosure submission by a governance voter; production read/API packaging is downstream implementation work.
 - The reference implementation includes Daml tests for binding lifecycle, action taxonomy, strict role split, attribution, cooldown, deadlines, stale binding handling, binding garbage collection, and one-slot tallying.
 
 ### Affected Contract Surface
@@ -55,7 +55,7 @@ The following existing surfaces remain operator-controlled or otherwise stable:
 
 ### Governance-Voter Binding
 
-The proposal adds a separate DSO-owned authority contract instead of storing governance-voter state on `SvInfo`. `SvInfo` describes SV membership and operational identity. The governance voter is related to the SV but is not the operator identity.
+This CIP adds a separate DSO-owned authority contract instead of storing governance-voter state on `SvInfo`. `SvInfo` describes SV membership and operational identity. The governance voter is related to the SV but is not the operator identity.
 
 ```daml
 template SvGovernanceVoter
@@ -252,7 +252,7 @@ Bindings for removed SVs, and duplicate bindings left by older package versions 
 
 ### One-Vote-Per-Node Semantics
 
-This proposal does not change vote weight or tallying.
+This CIP does not change vote weight or tallying.
 
 - `VoteRequest.votes` remains a per-represented-SV slot keyed by SV display-name `Text` for upgrade compatibility. The represented SV remains available as `Vote.sv`.
 - Both the operator path and the governance-voter path write the represented SV's existing slot.
@@ -265,15 +265,15 @@ This proposal does not change vote weight or tallying.
 
 The write path is not enough. A governance voter must be able to inspect the proposal before signing and must have enough contract visibility on the submitting participant to exercise the ledger choice.
 
-Phase 1 proposes the following visibility position:
+Phase 1 uses the following visibility position:
 
 - `SvGovernanceVoter` is not visible to the governance voter by observer. The governance voter discovers the binding through Scan/read APIs or receives it as a disclosed contract.
 - Proposal discovery and proposal-detail rendering are served through Scan or an SV-hosted read API rather than by making every proposal contract directly visible for browsing.
 - The supported unaffiliated-voter submit path is explicit disclosure: the governance voter submits the target contract IDs together with the disclosed contracts needed to exercise `DsoRules_CastVote` on the governance-voter path.
 - SV-hosted submission or relay remains a valid deployment option, but it is not required by the on-ledger design.
-- The remaining production packaging work is for Scan or an SV-hosted read API to return the proposal details, binding information, and disclosed-contract material needed for review and submission, similar to the existing `AmuletRules` flow used by validators.
+- Scan or an SV-hosted read API returns the proposal details, binding information, and disclosed-contract material needed for proposal inspection and submission, similar to the existing `AmuletRules` flow used by validators.
 
-This CIP claims compatibility with external participant submission and leaves the exact read/disclosure API packaging to downstream implementation.
+This CIP is compatible with external participant submission and leaves the exact read/disclosure API packaging to downstream implementation.
 
 ### Security Considerations
 
@@ -285,7 +285,7 @@ This CIP claims compatibility with external participant submission and leaves th
 - The cast choice canonicalizes `castBy`, `castByRole`, and `bindingCid` before recording.
 - Binding rotation is checked at cast time and, when `currentBindings` is supplied, at close time.
 - Audit records distinguish operator-cast and governance-voter-cast votes via `Vote.castBy` / `Vote.castByRole`.
-- `SRARC_OffboardSv` is intentionally not special-cased when the represented SV is the offboarding target. The represented SV's vote remains its vote; changing target-party voting rights is a broader governance-process question outside this authority-splitting CIP.
+- `SRARC_OffboardSv` is intentionally not special-cased when the represented SV is the offboarding target. The represented SV's vote remains its vote; changing target-party voting rights is a broader governance-process decision outside this authority-splitting CIP.
 
 ## Motivation
 
@@ -299,7 +299,7 @@ This CIP separates governance voting from node operation on the ledger without r
 
 ## Rationale
 
-The proposal keeps the first standards-track change narrow. It separates the governance-voting identity from the operator identity without changing voting weight, confirmation, execution, round automation, or broader governance process.
+This CIP keeps the first standards-track change narrow. It separates the governance-voting identity from the operator identity without changing voting weight, confirmation, execution, round automation, or broader governance process.
 
 This CIP does not standardize the standalone governance dApp, wallet/provider selection, deployment packaging, mobile or notification workflows, generalized identity, multiple voters per SV, broad rights-holder voting, or tokenomics. Those topics belong to later milestones or separate governance decisions.
 
@@ -309,7 +309,7 @@ Optional governance-voter arguments on `DsoRules_RequestVote` and `DsoRules_Cast
 
 The one-vote-per-node model is preserved by continuing to store the vote under the represented SV's existing `VoteRequest.votes` slot. The governance voter signs the SV's vote; it does not become a new voting unit. The map key remains `Text` for upgrade compatibility, while `Vote.sv` carries the represented SV party used for tallying and staleness checks.
 
-`SRARC_OffboardSv` is intentionally included in the Phase 1 allowlist because offboarding is a governance-membership decision rather than a node-operation decision. The high-impact path should have clear UI warnings, reason quality expectations, and tests, but it should not silently move back to the operator-only bucket. This CIP also does not exclude the target SV from voting on its own offboarding; it preserves the current represented-SV voting semantics and treats any target-party voting restriction as a separate governance-process decision.
+`SRARC_OffboardSv` is intentionally included in the Phase 1 allowlist because offboarding is a governance-membership decision rather than a node-operation decision. The high-impact path is paired with clear UI warnings, reason quality expectations, and tests, but it does not move back to the operator-only bucket. This CIP also does not exclude the target SV from voting on its own offboarding; it preserves the current represented-SV voting semantics and treats any target-party voting restriction as a separate governance-process decision.
 
 ### CIP-0103 Compatibility
 
