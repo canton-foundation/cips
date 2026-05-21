@@ -148,6 +148,37 @@ The symmetric errors on the governance-voter path use:
 
 These are distinct from binding, authority, and request-state errors surfaced elsewhere in the cast logic.
 
+### Operational And Non-Operational Vote Classification
+
+The Phase 1 split follows from the current Splice governance flow: proposal review, vote preparation, signing, and submission are all routed through the SV application and the SV operator identity path. That path is appropriate for node automation and operational workflows, but it also makes policy voting depend on node-operator credentials. The classification below separates actions that express governance intent from actions that operate, onboard, bootstrap, or automate SV infrastructure.
+
+Governance-voter-eligible actions are those that satisfy all of these conditions:
+
+1. The action is explicitly allowlisted in `isGovernanceVoterAction`.
+2. The action expresses policy, configuration, reward, application-status, activity-accounting, or governance-membership intent.
+3. The action does not give the governance voter authority to operate an SV node, confirm or execute actions, onboard SVs, bootstrap external-party infrastructure, run round automation, or control payment workflows.
+
+The Phase 1 governance-voter allowlist is:
+
+- `SRARC_GrantFeaturedAppRight`: featured-app status governance.
+- `SRARC_RevokeFeaturedAppRight`: featured-app status governance.
+- `SRARC_SetConfig`: DSO rules configuration governance.
+- `SRARC_UpdateSvRewardWeight`: reward-weight policy governance.
+- `SRARC_CreateUnallocatedUnclaimedActivityRecord`: governance-approved activity or reward accounting.
+- `SRARC_OffboardSv`: governance-membership decision.
+- `CRARC_SetConfig`: Amulet rules configuration governance.
+
+The following categories remain operator-only in Phase 1:
+
+- SV onboarding and membership activation, including `SRARC_AddSv` and `SRARC_ConfirmSvOnboarding`.
+- Governance-voter binding lifecycle changes, including `SRARC_RotateGovernanceVoter`, because rotation changes who may exercise the represented SV's governance vote and therefore runs through the confirmation-quorum path.
+- External-party and infrastructure bootstrap, including `SRARC_CreateExternalPartyAmuletRules`, `SRARC_CreateTransferCommandCounter`, and `SRARC_CreateBootstrapExternalPartyConfigStateInstruction`.
+- Round lifecycle automation, including mining-round start/archive actions.
+- ANS payment workflow actions.
+- Any `ActionRequiringConfirmation` constructor not explicitly listed by `isGovernanceVoterAction`.
+
+This classification preserves the current one-vote-per-SV governance model while moving only non-operational policy voting onto the governance-voter authority path.
+
 ### Vote Request Creation
 
 `DsoRules_RequestVote` remains the single request-creation choice. It gains an optional `bindingCid` argument appended at the end for upgrade compatibility:
