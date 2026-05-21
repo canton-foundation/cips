@@ -106,7 +106,7 @@ The registrar can then facilitate registration / renewal for end users. Facilita
 Other registrars (since they're required to run the DRO) also get a fee share on registrations. The flow:
 
 - The user makes a payment
-- `NameRegistry` guarantees it's above the minimum floor and done on the basis of validaity (e.g. `minFloorRate * expiry`)
+- `NameRegistry` guarantees it's above the minimum floor and done on the basis of validity (e.g. `minFloorRate * expiry`)
 - The fee that the end-user pays is split into two transfers, both sent by the user: the facilitating registrar's commission goes straight to them, and the remainder goes to the DRO treasury
 
 The treasury accrual to the registrar group can be withdrawn every X via a `Treasury` contract, which gives an even split of the treasury pool to currently whitelisted registrars.
