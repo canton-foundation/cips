@@ -9,9 +9,9 @@ Companion to: CIP-XXXX (Party Name Resolution), CIP-YYYY (Party Identity Verific
 
 Status: Draft
 
-Updated: 2026-05-27
+Created: 2026-05-28
 
-Post-History: Canton Identity and Metadata Working Group (Jan–Feb 2026)
+Post-History: Canton Identity and Metadata Working Group (Jan–May 2026)
 
 Requires: CN Credentials Standard, CNS 2.0
 ```
@@ -1193,9 +1193,9 @@ When a collision is detected, the response MUST include collision details:
 }
 ```
 
-#### 8.5 Cross-Resolver Collision Arbitration
+#### 8.5 Cross-Resolver Collision Arbitration (deferred)
 
-For featured resolvers, the Canton Foundation MAY establish a collision arbitration process via the Tech & Ops Committee. Disputed name-to-party mappings across featured resolvers can be escalated for governance review. The arbitration decision is published as a T1 credential that overrides conflicting resolver results.
+Governance-based arbitration of disputed name-to-party mappings across featured resolvers is deferred to the future governance CIP (registrar governance and dispute resolution). This specification defines collision detection and surfacing only (Sections 8.1–8.4): when featured resolvers disagree, CPRP returns both candidates with their trust paths and the app's strategy decides. A binding governance decision — escalation, review, and a T1 arbitration credential that overrides conflicting results — is left to that future CIP.
 
 
 ### 9. Cross-Chain Identity Resolution
@@ -1434,29 +1434,9 @@ template ResolverFeaturedStatus with
       do return ()
 ```
 
-#### 11.5 CollisionArbitration
+#### 11.5 CollisionArbitration (deferred)
 
-```daml
-template CollisionArbitration with
-    dso        : Party
-    name       : Text
-    network    : Text
-    resolvedTo : Party
-    details    : Text
-    decidedAt  : Time
-  where
-    signatory dso
-
-    choice Arbitration_Supersede : ContractId CollisionArbitration
-      with
-        newResolvedTo : Party
-        newDetails    : Text
-        newDecidedAt  : Time
-      controller dso
-      do create CollisionArbitration with
-           dso, name, network, resolvedTo = newResolvedTo,
-           details = newDetails, decidedAt = newDecidedAt
-```
+Governance-based arbitration of disputed names across featured resolvers is deferred to the future governance CIP (registrar governance and dispute resolution). This specification defines collision detection and surfacing (Section 8) but not the on-ledger arbitration mechanism. The Daml template and credential encoding for binding arbitration decisions will be specified by that CIP.
 
 #### 11.6 ACS Impact Assessment
 
@@ -1475,7 +1455,6 @@ Network-wide contracts:
 | Contract Type | Count Total | Estimated Size |
 |--------------|-------------|---------------|
 | ResolverFeaturedStatus | ~10–30 (featured resolvers) | ~500 bytes each |
-| CollisionArbitration | Rare (dispute cases only) | ~500 bytes each |
 
 Estimated total ACS impact for 1,000 parties:
 
@@ -1594,42 +1573,19 @@ Scan computes display names following the algorithm in Section 3.4, using a Scan
 
 #### 14.1 Overview
 
-The `.canton` extension is a human-readable namespace for Canton Network parties. The WG has asked: "How to standardize what this means?" This section defines the semantics and governance of the `.canton` namespace within CPRP.
+The `.canton` extension is a human-readable, Canton-native naming convention (not a DNS TLD — there is no `.canton` in the DNS root). Allocation, uniqueness, and governance of `.canton` names are defined by the dedicated `.canton` CIP led by Axymos (PR #209), not by CPRP. CPRP's role is narrower: it treats `.canton` as one resolver source among many — composing `.canton` results with other sources, attaching trust, and detecting cross-resolver collisions. This section describes only how `.canton` names flow through CPRP; it does not define `.canton` allocation policy.
 
-#### 14.2 Definition
+#### 14.2 How .canton names flow through CPRP
 
-A `.canton` name is a human-readable identifier of the form `<name>.canton` that maps to a Canton Party ID. Examples: `acme-bank.canton`, `goldmansachs.canton`, `dtcc.canton`.
+A `.canton` name is a human-readable identifier of the form `<name>.canton` that maps to a Canton Party ID (e.g., `acme-bank.canton`, `goldmansachs.canton`). Within CPRP:
 
-The `.canton` namespace is NOT a DNS domain (there is no `.canton` TLD in the DNS root). It is a Canton-native naming convention managed through the CPRP resolver ecosystem.
+1. Network-scoped: `acme-bank.canton` on MainNet is distinct from the same name on TestNet, per the FQPN network discriminator.
+2. Verification-independent: a resolved `.canton` name carries whatever trust tier its resolver and credentials establish (Section 5); the `.canton` suffix itself confers no trust.
+3. Resolver-agnostic: any resolver authorized under the `.canton` CIP may serve `.canton` names; CPRP composes their results and surfaces collisions (Section 8) without itself allocating names.
 
-#### 14.3 Semantics
+#### 14.3 Relationship to CNS 1.0
 
-A `.canton` name carries the following semantics:
-
-1. Uniqueness: Within a single resolver, a `.canton` name MUST map to exactly one Party ID. Across resolvers, collisions are handled per Section 8.
-2. Network-scoped: A `.canton` name is scoped to a specific Canton network. `acme-bank.canton` on MainNet is distinct from `acme-bank.canton` on TestNet.
-3. Verification-independent: A `.canton` name can be unverified (self-registered), partially verified, or fully verified. The verification status is determined by the trust model (Section 5), not by the `.canton` suffix itself.
-4. Resolver-agnostic: Multiple resolvers MAY offer `.canton` names. Freename might offer `acme-bank.canton` while another resolver offers the same name. Collision management (Section 8) handles this.
-
-#### 14.4 Registration
-
-`.canton` names can be registered through any resolver that supports the `.canton` namespace. There is no single authority for `.canton` names. The trust tier of the registering resolver determines the trust level of the name:
-
-- A `.canton` name registered through a T1 process (SV-verified DNS claim) carries the highest trust.
-- A `.canton` name registered through a T3 featured resolver (e.g., Freename) carries community-vetted trust.
-- A `.canton` name self-registered via CNS 1.0 remains `.unverified.cns` until verified through CPRP.
-
-#### 14.5 Relationship to CNS 1.0
-
-Existing CNS 1.0 names (`name.unverified.cns`) are preserved. CPRP does not modify CNS 1.0. However, a party with a CNS 1.0 name can upgrade to a verified `.canton` name by:
-
-1. Registering a `.canton` name with a CPRP resolver.
-2. Completing the resolver's verification process.
-3. Optionally retaining the CNS 1.0 name as a legacy alias.
-
-#### 14.6 Future Governance
-
-The Canton Foundation MAY, via a future CIP, establish a governance process for reserved `.canton` names (e.g., protecting names of systemically important institutions). This is out of scope for the current CIP.
+Existing CNS 1.0 names (`name.unverified.cns`) are preserved unchanged. A party may additionally hold a `.canton` name issued under the `.canton` CIP and a verified name imported via CPRP (DNS, vLEI, etc.); all coexist in the composition result, and the app's resolution strategy decides which to display.
 
 
 ### 15. Extensibility: Asset and API Naming
@@ -1642,10 +1598,12 @@ Wayne Collier noted in the WG that the scope should include "not just identity" 
 
 CPRP provides the following extension points for future asset and API naming CIPs:
 
-Asset naming: The FQPN format `<resolver>:<registrar>:<name>` can accommodate asset identifiers by introducing asset-specific resolvers. For example: `token-registry:canton:acme-bond-2026` could resolve to an asset contract ID rather than a Party ID. A future CIP would define:
-- An asset-specific variant of the `resolve` method.
+Asset naming: Under the Canton token standard, an instrument is identified by an `InstrumentId` of `{admin: Party, id: Text}` — so an asset is naturally a subname of its administering party rather than a standalone top-level name. CPRP accommodates this by resolving the admin party to its verified FQPN and treating the instrument `id` as a delegated subname beneath it, reusing the name-delegation mechanism (Section 2.7). For example, an instrument administered by BlackRock resolves by first resolving the admin party to `mainnet:dns:blackrock.com:default`, then discovering the admin's token-standard off-ledger API via its endpoint claim, and querying that API (e.g., the token-standard `/registry/metadata/v1/instruments/{id}` endpoint) for the published symbol. A future CIP would define:
+- An asset-specific variant of the `resolve` method that takes an `InstrumentId` and returns the administering party's verified name together with the instrument metadata.
 - Asset metadata claim keys (e.g., `cprp-asset/isin`, `cprp-asset/cusip`, `cprp-asset/token-standard`).
-- Asset-specific trust requirements.
+- Asset-specific trust requirements (an asset inherits the trust tier of its administering party).
+
+This keeps asset naming consistent with party naming — one resolution and delegation model rather than a parallel scheme — and dovetails with CIP-56 token-admin endpoint discovery.
 
 API naming: The `cprp/endpoint:*` claim keys already provide basic API discovery. A future CIP could extend this with:
 - Service-level metadata (capabilities, version, SLA).
@@ -1677,7 +1635,7 @@ DNS provides a universally accessible, highly available, and well-understood dis
 
 ### Why Collision Management in the Core Spec
 
-In a multi-resolver system, collisions are inevitable. Leaving collision handling undefined would result in inconsistent behavior across applications and potential security issues (an attacker could register a name on a low-trust resolver to confuse applications querying a high-trust resolver). By making collision detection, reporting, and arbitration part of the core specification, CPRP ensures that all implementations handle this case consistently.
+In a multi-resolver system, collisions are inevitable. Leaving collision handling undefined would result in inconsistent behavior across applications and potential security issues (an attacker could register a name on a low-trust resolver to confuse applications querying a high-trust resolver). By making collision detection and reporting part of the core specification, CPRP ensures that all implementations handle this case consistently. Governance-based arbitration of disputes is deferred to the future governance CIP.
 
 ### Why Cross-Chain in the Core Spec
 
@@ -1718,7 +1676,7 @@ Resolution queries reveal counterparty interest. CPRP mitigates this through:
 Without controls, an attacker could register names resembling legitimate institutions on permissionless resolvers. CPRP mitigates this through:
 - The trust tier system: permissionless resolver credentials are T4, which institutional trust policies will reject.
 - The collision management system: if a legitimate institution registers the same name on a featured resolver, the collision is detected and the higher-trust registration prevails.
-- Governance-based collision arbitration for disputed names across featured resolvers.
+- Governance-based arbitration for disputed names across featured resolvers (deferred to the future governance CIP).
 
 ### Network Confusion Attacks
 
@@ -2445,9 +2403,9 @@ Scan has `reject_if_collision: false`:
 
 Scan selects the higher-weight result (Freename, 0.8 > 0.3) and displays it with a collision warning indicator. The full profile page shows the conflicting registration.
 
-#### Step 4: Arbitration (optional)
+#### Step 4: Arbitration (deferred to future governance CIP)
 
-If the collision involves two featured resolvers, either party may escalate to the Tech & Ops Committee. The committee reviews the claim and publishes a `CollisionArbitration` credential (T1), permanently resolving the dispute.
+If the collision involves two featured resolvers, binding arbitration is out of scope for this specification and is deferred to the future governance CIP. In the current scope, CPRP surfaces both candidates with their trust paths and the app's resolution strategy decides which to act on; a governance process for escalating and permanently resolving such disputes (and the T1 arbitration credential that would encode the decision) will be defined by that CIP.
 
 
 ### Flow 7: Address Book Meets Network Resolver
@@ -2720,8 +2678,7 @@ cprp-resolver-addressbook    (Address book resolver plugin)
 cprp-daml                    (Daml contract templates)
   ├── PartyNameRegistration
   ├── NameDelegation
-  ├── ResolverFeaturedStatus
-  └── CollisionArbitration
+  └── ResolverFeaturedStatus
 
 cprp-service                 (Resolution Service — the off-ledger server)
   ├── cprp-sdk
