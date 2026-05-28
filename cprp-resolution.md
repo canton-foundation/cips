@@ -6,7 +6,7 @@ Author(s): Paolo Domenighetti (Freename AG)
 
 Status: Draft
 
-Created: 2026-03-02
+Created: 2026-05-27
 
 Post-History: Canton Identity and Metadata Working Group (Jan–Feb 2026)
 
@@ -53,7 +53,7 @@ Digital Asset is building credential formats and a registry (what the data looks
 
 This CIP implements the resolution-specific design principles established in the WG:
 
-- Follows the `<resolver>:<namespace>:<n>` addressing pattern proposed by Simon Meier
+- Follows the `<network>:<resolver>:<registrar>:<name>` addressing pattern proposed by Simon Meier
 - Implements the "apps decide resolution strategy" principle — no foundation-mandated resolution policy
 - Avoids bloating the ACS of the DSO party (resolution queries are off-ledger)
 - Avoids bloating the Scan API surface (additive changelog integration only)
@@ -67,22 +67,27 @@ The full specification is in the shared companion document [CPRP-spec.md](./CPRP
 
 ### Fully Qualified Party Name (FQPN)
 
-Names are structured as `<network>/<resolver>:<namespace>:<n>`:
+Names are structured as `<network>:<resolver>:<registrar>:<name>`, following the FQPN syntax proposed by Simon Meier in the Working Group:
 
 | Component | Purpose | Example Values |
 |-----------|---------|---------------|
 | `network` | Prevents cross-environment confusion | `mainnet`, `testnet`, `devnet` |
-| `resolver` | Identity source that backs the name | `dns`, `vlei`, `freename`, `self` |
-| `namespace` | Registrant's domain or organizational scope | `goldmansachs.com`, `acme-bank.canton` |
-| `n` | Specific name within the namespace | `default`, `treasury`, `trading-desk-3` |
+| `resolver` | Identity source that backs the name | `dns`, `vlei`, `cns`, `freename`, `self` |
+| `registrar` | Naming authority or registrant scope within the resolver (the component earlier drafts called the namespace) | `goldmansachs.com`, `acme-bank.canton`, `lloyds` |
+| `name` | Specific name within the registrar | `default`, `treasury`, `trading-desk-3` |
 
 Examples:
-- `mainnet/dns:goldmansachs.com:default`
-- `mainnet/vlei:784F5XWPLTWKTBV3E584:default`
-- `testnet/freename:acme-bank.canton:treasury`
-- `mainnet/party:<namespace>:<prefix>` (built-in, every party gets one automatically)
+- `mainnet:dns:goldmansachs.com:default`
+- `mainnet:vlei:784F5XWPLTWKTBV3E584:default`
+- `testnet:freename:acme-bank.canton:treasury`
+- `mainnet:self:acme-bank:default` (self-attested: the registrar is the party's own freely chosen Party ID prefix, hence T4 trust)
+- `mainnet:party:<party-prefix>:default` (built-in, every party gets one automatically, derived from its Party ID)
 
-The `.canton` namespace examples: `alice.canton` (individual), `goldmansachs.canton` (institution), `treasury.acme.canton` (delegated subname). Users type `alice.canton` — the full FQPN is infrastructure-level, invisible to users, like IP addresses behind DNS.
+The `self` and `party` resolvers are built-in and available in all networks; they are not registered on a per-network basis. The `network` segment of the FQPN performs the disambiguation, so `mainnet:party:...` and `devnet:party:...` are distinct names backed by the same built-in resolver. The `self` resolver returns claims a party publishes about itself with no external verification (T4, lowest trust); the `party` resolver guarantees that every Canton party always has at least one FQPN derived from its Party ID, even before any name is registered.
+
+Because a Canton Party ID itself contains `::` separators, full Party IDs are referenced in FQPNs by their prefix (the human-chosen component) rather than embedded verbatim, so that the `:` field delimiter remains unambiguous.
+
+Human-readable names such as `alice.canton` are provided through the `.canton` namespace, described in its own section below. Users type `alice.canton` directly — the full FQPN is infrastructure-level and invisible, like IP addresses behind DNS.
 
 Network discrimination is a security requirement: TestNet names must not be confusable with MainNet names.
 
@@ -92,7 +97,7 @@ Any identity provider can become a CPRP resolver by implementing the following l
 
 | Method | Input | Output | Purpose |
 |--------|-------|--------|---------|
-| `resolve` | namespace, name | `ResolutionResult` | Forward lookup: name → Party ID + metadata |
+| `resolve` | registrar, name | `ResolutionResult` | Forward lookup: name → Party ID + metadata |
 | `reverseResolve` | partyId | `ReverseResolutionResult` | Reverse lookup: Party ID → registered names |
 | `resolveMulti` | queries[] | `ResolutionResult[]` | Batch resolution (latency optimization) |
 | `changelog` | since timestamp | `ChangelogEntry[]` | Credential changes since a given time |
@@ -146,6 +151,8 @@ Three resolution modes:
 Two reference strategies are defined in the spec:
 - `INSTITUTIONAL_DEFAULT` — parallel mode, strict collision policy, requires DNS or vLEI
 - `PERMISSIVE_DEFAULT` — parallel mode, permissive collision policy, address-book-first
+
+`INSTITUTIONAL_DEFAULT` does not query the address book first because institutional flows require counterparty identity to be backed by an externally verifiable source (DNS or vLEI) rather than by a local, operator-subjective address book entry. The address book may still participate as a lower-weight fallback within the same strategy — this is a matter of resolver position and weight, not exclusion. `PERMISSIVE_DEFAULT` reverses the emphasis for consumer and explorer contexts, where a recognized local label is preferable to showing no name at all.
 
 ### Composition Engine
 
@@ -209,7 +216,7 @@ Examples of .canton names:
 - `goldmansachs.canton` — an institution registers its canonical Canton-native name
 - `treasury.acme.canton` — a delegated subname under `acme.canton` for a treasury desk
 
-Users type `alice.canton` directly. The FQPN infrastructure is invisible — resolvers and namespaces are handled by the SDK, just as DNS root servers and TLD delegation are invisible to web users.
+Users type `alice.canton` directly. The FQPN infrastructure is invisible — resolvers and registrars are handled by the SDK, just as DNS root servers and TLD delegation are invisible to web users.
 
 ### Three-Layer Display Model
 
@@ -243,7 +250,7 @@ Resolution-layer data is encoded as standard CN Credentials — no custom Daml t
 
 ### PartyNameRegistration (as credential)
 
-A name registration is a credential where publisher = resolver party, subject = registered party, holder = registered party. Claims include `cprp/resolver`, `cprp/namespace`, `cprp/name`, `cprp/network`, and a `cprp/record-version`. Updates are modeled as archiving the old credential and publishing a new one. Revocation is modeled as archival.
+A name registration is a credential where publisher = resolver party, subject = registered party, holder = registered party. Claims include `cprp/resolver`, `cprp/registrar`, `cprp/name`, `cprp/network`, and a `cprp/record-version`. Updates are modeled as archiving the old credential and publishing a new one. Revocation is modeled as archival.
 
 ### NameDelegation (as credential)
 
@@ -298,10 +305,10 @@ Trust-layer threats (credential replay, issuer impersonation, encrypted field at
 
 ## Implementation
 
-A reference implementation is proposed as a Canton Protocol Development Fund grant (PR to `canton-dev-fund`). The resolution layer is delivered across milestones A1 (CIP design + resolver interface), A2 (resolver prototype + TestNet), and A3 (resolution SDK + adoption) — see Grant A: Party Name Resolution ($250k).
+A reference implementation is proposed separately as a Canton Protocol Development Fund grant (PR to `canton-dev-fund`). Funding scope, milestones, and budget are defined in that grant proposal and are intentionally kept out of this CIP, so that standards review and funding review remain independent.
 
 
 ## Companion Documents
 
 - CIP-YYYY: Party Identity Verification — Trust tier model, verification policies, credential mapping, encrypted fields, vLEI verification, cross-chain identity
-- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, migration, and milestones.
+- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, and migration.
