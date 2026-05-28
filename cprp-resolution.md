@@ -6,9 +6,9 @@ Author(s): Paolo Domenighetti (Freename AG)
 
 Status: Draft
 
-Created: 2026-05-27
+Created: 2026-05-28
 
-Post-History: Canton Identity and Metadata Working Group (Jan–Feb 2026)
+Post-History: Canton Identity and Metadata Working Group (Jan–May 2026)
 
 Requires: CN Credentials Standard (CIP TBD), CNS 2.0 (CIP TBD)
 
@@ -180,7 +180,7 @@ When the same name maps to different parties across resolvers:
 | Strict | Returns status `COLLISION` with both candidates; app must present disambiguation UI |
 | Permissive | Selects the highest-weight result; attaches collision warning to the response |
 
-Governance-based arbitration is available for disputes between featured resolvers via a `CollisionArbitration` Daml contract (T1 authority).
+Governance-based arbitration of disputes between featured resolvers is deferred to the future governance CIP (registrar governance and dispute resolution). This CIP defines collision detection and surfacing only: on a collision, the strategy returns the candidates with their trust paths and the app decides.
 
 ### Address Books
 
@@ -203,18 +203,17 @@ Name owners can authorize sub-parties to register subnames. Delegation is modele
 
 ### The .canton Namespace
 
-`.canton` is defined as a Canton-native naming convention — not a DNS TLD. Properties:
+`.canton` is a Canton-native naming convention — not a DNS TLD. Allocation, uniqueness, and governance of `.canton` names are defined by the dedicated `.canton` CIP led by Axymos (PR #209), not by this CIP. CPRP treats `.canton` as one resolver source among many: it composes `.canton` results with other sources, attaches trust per CIP-YYYY, and surfaces cross-resolver collisions — without itself allocating `.canton` names. As they flow through CPRP, `.canton` names are:
 
-- Network-scoped (exists independently per MainNet/TestNet/DevNet)
-- Verification-independent (verification comes from credentials, not from the name itself)
-- Resolver-agnostic (multiple resolvers can serve `.canton` names)
-- Registration model defined by each resolver's own policy
+- Network-scoped (distinct per MainNet/TestNet/DevNet)
+- Verification-independent (trust comes from credentials, not from the suffix)
+- Composable alongside imported names (DNS, vLEI, etc.) in the resolution result
 
-Examples of .canton names:
+Examples of .canton names as seen by CPRP:
 
-- `alice.canton` — an individual or small entity registers a .canton name through a featured resolver (e.g., xNS, Freename), similar to registering `alice.eth` on ENS
-- `goldmansachs.canton` — an institution registers its canonical Canton-native name
-- `treasury.acme.canton` — a delegated subname under `acme.canton` for a treasury desk
+- `alice.canton` — an individual name issued under the `.canton` CIP, resolved and trust-evaluated by CPRP like any other source
+- `goldmansachs.canton` — an institution's Canton-native name, which may coexist with its DNS-verified name in the composition result
+- `treasury.acme.canton` — a delegated subname under `acme.canton`, verified via the delegation chain (Name Delegation, above)
 
 Users type `alice.canton` directly. The FQPN infrastructure is invisible — resolvers and registrars are handled by the SDK, just as DNS root servers and TLD delegation are invisible to web users.
 
