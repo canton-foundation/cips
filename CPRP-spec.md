@@ -9,7 +9,7 @@ Companion to: CIP-XXXX (Party Name Resolution), CIP-YYYY (Party Identity Verific
 
 Status: Draft
 
-Created: 2026-03-15
+Updated: 2026-05-27
 
 Post-History: Canton Identity and Metadata Working Group (Jan–Feb 2026)
 
@@ -64,7 +64,7 @@ Party Administrator. The entity controlling the private key corresponding to the
 
 Network. A Canton deployment environment: `mainnet`, `testnet`, or `devnet`. See Section 1.1.
 
-Fully Qualified Party Name (FQPN). A structured identifier of the form `<network>/<resolver>:<namespace>:<name>` that uniquely identifies a party within the scope of a specific resolver, namespace, and network. Examples: `mainnet/dns:acme.com:treasury`, `testnet/vlei:5493001KJTIIGC8Y1R12:default`, `mainnet/freename:acme-bank.canton:treasury`. See Section 1.1 for the network prefix.
+Fully Qualified Party Name (FQPN). A structured identifier of the form `<network>:<resolver>:<registrar>:<name>` that uniquely identifies a party within the scope of a specific resolver, registrar, and network. Examples: `mainnet:dns:acme.com:treasury`, `testnet:vlei:5493001KJTIIGC8Y1R12:default`, `mainnet:freename:acme-bank.canton:treasury`. See Section 1.1 for the network prefix.
 
 Short FQPN. When the network context is unambiguous (e.g., the application is connected to a specific network), the network prefix MAY be omitted: `dns:acme.com:treasury`. Implementations MUST internally normalize short FQPNs to full FQPNs using the connected network.
 
@@ -99,7 +99,7 @@ Names MUST be scoped to a specific Canton network to prevent confusion between T
 The network discriminator is expressed as a prefix in the FQPN:
 
 ```
-<network>/<resolver>:<namespace>:<name>
+<network>:<resolver>:<registrar>:<name>
 
 Where <network> is one of:
   mainnet   — Canton MainNet (production)
@@ -145,7 +145,7 @@ Any identity provider MAY become a CPRP resolver by implementing the Resolver In
 
 A resolver MUST:
 
-- Maintain a mapping from `(namespace, name)` pairs to Party IDs.
+- Maintain a mapping from `(registrar, name)` pairs to Party IDs.
 - Publish backing credentials via the CN Credentials Daml interface.
 - Expose a resolution API conforming to the schemas defined in this section.
 - Report a `resolver_id` that is unique within the Canton Network.
@@ -171,7 +171,7 @@ claims: {
   "cprp/resolver-endpoint": "<base_url>",
   "cprp/resolver-type":     "featured" | "permissionless" | "address-book",
   "cprp/network":           "mainnet" | "testnet" | "devnet",
-  "cprp/namespaces":        "<comma_separated_supported_namespaces>",
+  "cprp/registrars":        "<comma_separated_supported_registrars>",
   "cprp/capabilities":      "<comma_separated_capabilities>"
 }
 ```
@@ -193,7 +193,7 @@ Supported capabilities:
 
 ##### 2.3.1 resolve
 
-Resolves a name within a namespace to a Resolution Record.
+Resolves a name within a registrar to a Resolution Record.
 
 Request:
 
@@ -201,7 +201,7 @@ Request:
 {
   "method": "cprp.resolve",
   "params": {
-    "namespace": "<string>",
+    "registrar": "<string>",
     "name":      "<string>"
   }
 }
@@ -214,7 +214,7 @@ Response:
   "result": {
     "resolver_id":  "<string>",
     "network":      "<mainnet|testnet|devnet>",
-    "namespace":    "<string>",
+    "registrar":    "<string>",
     "name":         "<string>",
     "party_id":     "<canton_party_id>",
     "credentials":  [ <CredentialRef>, ... ],
@@ -242,7 +242,7 @@ Fields:
 |-------|------|----------|-------------|
 | `resolver_id` | string | REQUIRED | The resolver's unique identifier |
 | `network` | string | REQUIRED | The Canton network this record belongs to |
-| `namespace` | string | REQUIRED | The namespace queried |
+| `registrar` | string | REQUIRED | The registrar queried |
 | `name` | string | REQUIRED | The name queried |
 | `party_id` | string | REQUIRED | The resolved Canton Party ID |
 | `credentials` | array | REQUIRED | References to backing CN Credential contracts |
@@ -271,7 +271,7 @@ Note: `ledger_effective_time` (LET) is included in every CredentialRef to suppor
 
 ##### 2.3.2 resolveMulti
 
-Resolves a name within a namespace and returns results from multiple matching entries, if any. This is used when a resolver manages multiple credential-backed bindings for the same name (e.g., a name delegated to sub-parties).
+Resolves a name within a registrar and returns results from multiple matching entries, if any. This is used when a resolver manages multiple credential-backed bindings for the same name (e.g., a name delegated to sub-parties).
 
 Request:
 
@@ -279,7 +279,7 @@ Request:
 {
   "method": "cprp.resolveMulti",
   "params": {
-    "namespace": "<string>",
+    "registrar": "<string>",
     "name":      "<string>",
     "limit":     <integer, default 10>,
     "offset":    <integer, default 0>
@@ -319,7 +319,7 @@ Response:
     {
       "resolver_id": "<string>",
       "network":     "<string>",
-      "namespace":   "<string>",
+      "registrar":   "<string>",
       "name":        "<string>",
       "confidence":  "<HIGH|MEDIUM|LOW>",
       "delegated_by": "<fqpn|null>"
@@ -354,7 +354,7 @@ Response:
     {
       "type":       "created" | "updated" | "revoked" | "delegated",
       "timestamp":  "<ISO8601>",
-      "namespace":  "<string>",
+      "registrar":  "<string>",
       "name":       "<string>",
       "party_id":   "<canton_party_id>",
       "credential_ref": <CredentialRef>,
@@ -385,7 +385,7 @@ Standard error codes:
 
 | Code | Meaning |
 |------|---------|
-| 1001 | Namespace not supported by this resolver |
+| 1001 | Registrar not supported by this resolver |
 | 1002 | Name not found |
 | 1003 | Party ID not found (reverse resolve) |
 | 1004 | Invalid request parameters |
@@ -433,7 +433,7 @@ An address book entry MAY be as simple as:
 
 ```json
 {
-  "namespace":    "internal",
+  "registrar":    "internal",
   "name":         "acme-treasury",
   "party_id":     "party::122a8f9f...",
   "display_name": "ACME Treasury Desk",
@@ -574,7 +574,7 @@ A Resolution Strategy is a JSON document conforming to the following schema:
       "weight":       <number, 0.0–1.0>,
       "required":     <boolean>,
       "timeout_ms":   <integer>,
-      "namespaces":   ["<string>", ...]
+      "registrars":   ["<string>", ...]
     },
     ...
   ],
@@ -669,7 +669,7 @@ FUNCTION compose(results: [ResolutionRecord], strategy: ResolutionStrategy)
      FALLBACK to the raw name from the FQPN.
 
   5. COMPUTE ascii_form:
-     "<resolver_id>:<namespace>:<name>" from the highest-weight resolver.
+     "<resolver_id>:<registrar>:<name>" from the highest-weight resolver.
 
   6. IF strategy includes a verification_policy (CIP-YYYY):
        EVALUATE trust (see Section 5).
@@ -687,7 +687,7 @@ FUNCTION compose(results: [ResolutionRecord], strategy: ResolutionStrategy)
 ```json
 {
   "display_name":        "<string>",
-  "ascii_form":          "<resolver:namespace:name>",
+  "ascii_form":          "<resolver:registrar:name>",
   "party_id":            "<canton_party_id>",
   "network":             "<mainnet|testnet|devnet>",
   "status":              "VERIFIED" | "UNVERIFIED" | "PARTIAL" | "REVOKED" | "COLLISION",
@@ -733,9 +733,9 @@ INSTITUTIONAL_DEFAULT:
   "strategy_id": "institutional_default",
   "network": "mainnet",
   "resolvers": [
-    { "resolver_id": "dns",     "weight": 1.0, "required": false, "timeout_ms": 5000, "namespaces": ["*"] },
-    { "resolver_id": "vlei",    "weight": 0.9, "required": false, "timeout_ms": 5000, "namespaces": ["*"] },
-    { "resolver_id": "cn-cred", "weight": 0.8, "required": false, "timeout_ms": 3000, "namespaces": ["*"] }
+    { "resolver_id": "dns",     "weight": 1.0, "required": false, "timeout_ms": 5000, "registrars": ["*"] },
+    { "resolver_id": "vlei",    "weight": 0.9, "required": false, "timeout_ms": 5000, "registrars": ["*"] },
+    { "resolver_id": "cn-cred", "weight": 0.8, "required": false, "timeout_ms": 3000, "registrars": ["*"] }
   ],
   "address_books": [
     { "id": "org-directory", "type": "organization", "weight": 0.7, "position": "after_resolvers" }
@@ -762,9 +762,9 @@ PERMISSIVE_DEFAULT:
   "strategy_id": "permissive_default",
   "network": "mainnet",
   "resolvers": [
-    { "resolver_id": "dns",     "weight": 1.0, "required": false, "timeout_ms": 5000, "namespaces": ["*"] },
-    { "resolver_id": "cn-cred", "weight": 0.8, "required": false, "timeout_ms": 3000, "namespaces": ["*"] },
-    { "resolver_id": "*",       "weight": 0.5, "required": false, "timeout_ms": 3000, "namespaces": ["*"] }
+    { "resolver_id": "dns",     "weight": 1.0, "required": false, "timeout_ms": 5000, "registrars": ["*"] },
+    { "resolver_id": "cn-cred", "weight": 0.8, "required": false, "timeout_ms": 3000, "registrars": ["*"] },
+    { "resolver_id": "*",       "weight": 0.5, "required": false, "timeout_ms": 3000, "registrars": ["*"] }
   ],
   "address_books": [
     { "id": "local", "type": "local", "weight": 0.6, "position": "before_resolvers" }
@@ -815,7 +815,7 @@ Core identity claims:
 | Claim Key | Value Type | Description |
 |-----------|-----------|-------------|
 | `cprp/resolver` | string | Resolver ID that backs this credential |
-| `cprp/namespace` | string | The namespace within the resolver |
+| `cprp/registrar` | string | The registrar within the resolver |
 | `cprp/name` | string | The registered name |
 | `cprp/fqpn` | string | Full FQPN including network prefix |
 | `cprp/network` | string | Network discriminator: `mainnet`, `testnet`, `devnet` |
@@ -1118,7 +1118,7 @@ This design balances openness (anyone can build a resolver) with institutional t
 A Featured Resolver is registered via a dedicated CIP following the standard governance process:
 
 1. The resolver operator submits a CIP proposing featured status.
-2. The CIP specifies: resolver identity, namespaces served, verification methodology, operational commitments, and expected contribution to the Canton ecosystem.
+2. The CIP specifies: resolver identity, registrars served, verification methodology, operational commitments, and expected contribution to the Canton ecosystem.
 3. Super Validators vote on the CIP.
 4. Upon approval, the DSO party publishes a credential:
 
@@ -1129,7 +1129,7 @@ claims: {
   "cprp/featured-resolver":       "true",
   "cprp/featured-since":          "<ISO8601>",
   "cprp/featured-cip":            "<cip_number>",
-  "cprp/featured-namespaces":     "<comma_separated>",
+  "cprp/featured-registrars":     "<comma_separated>",
   "cprp/featured-renewal":        "<ISO8601>",
   "cprp/network":                 "<network>"
 }
@@ -1183,7 +1183,7 @@ When a collision is detected, the response MUST include collision details:
     {
       "party_id":    "<canton_party_id>",
       "resolver_id": "<string>",
-      "namespace":   "<string>",
+      "registrar":   "<string>",
       "name":        "<string>",
       "weight":      <number>,
       "confidence":  "<HIGH|MEDIUM|LOW>"
@@ -1287,7 +1287,7 @@ publisher: <vlei_resolver_party>
 subject:   <verified_party>
 claims: {
   "cprp/resolver":             "vlei",
-  "cprp/namespace":            "<lei>",
+  "cprp/registrar":            "<lei>",
   "cprp/name":                 "default",
   "cprp/trust-anchor":         "T2",
   "cprp/verification-method":  "vlei-check",
@@ -1347,7 +1347,7 @@ template PartyNameRegistration with
     dso        : Party
     resolver   : Party
     subject    : Party
-    namespace  : Text
+    registrar  : Text
     name       : Text
     fqpn       : Text
     network    : Text
@@ -1356,7 +1356,7 @@ template PartyNameRegistration with
     signatory resolver, subject
     observer dso
 
-    ensure namespace /= "" && name /= "" && network /= ""
+    ensure registrar /= "" && name /= "" && network /= ""
 
     choice Registration_Update : ContractId PartyNameRegistration
       with
@@ -1417,7 +1417,7 @@ template ResolverFeaturedStatus with
     cipNumber     : Text
     featuredSince : Time
     renewalDate   : Time
-    namespaces    : [Text]
+    registrars    : [Text]
     network       : Text
   where
     signatory dso
@@ -1517,9 +1517,9 @@ Batch resolve allows applications to resolve multiple names in a single request,
 ```json
 {
   "queries": [
-    { "namespace": "acme.com", "name": "treasury" },
-    { "namespace": "acme.com", "name": "trading" },
-    { "namespace": "bankb.com", "name": "default" }
+    { "registrar": "acme.com", "name": "treasury" },
+    { "registrar": "acme.com", "name": "trading" },
+    { "registrar": "bankb.com", "name": "default" }
   ]
 }
 ```
@@ -1642,7 +1642,7 @@ Wayne Collier noted in the WG that the scope should include "not just identity" 
 
 CPRP provides the following extension points for future asset and API naming CIPs:
 
-Asset naming: The FQPN format `<resolver>:<namespace>:<name>` can accommodate asset identifiers by introducing asset-specific resolvers. For example: `token-registry:canton:acme-bond-2026` could resolve to an asset contract ID rather than a Party ID. A future CIP would define:
+Asset naming: The FQPN format `<resolver>:<registrar>:<name>` can accommodate asset identifiers by introducing asset-specific resolvers. For example: `token-registry:canton:acme-bond-2026` could resolve to an asset contract ID rather than a Party ID. A future CIP would define:
 - An asset-specific variant of the `resolve` method.
 - Asset metadata claim keys (e.g., `cprp-asset/isin`, `cprp-asset/cusip`, `cprp-asset/token-standard`).
 - Asset-specific trust requirements.
@@ -1802,9 +1802,9 @@ publisher: party::dso::1220ffff...0001
 subject:   party::goldman1::1220abcd...ef01
 claims: {
   "cprp/resolver":              "dns",
-  "cprp/namespace":             "goldmansachs.com",
+  "cprp/registrar":             "goldmansachs.com",
   "cprp/name":                  "default",
-  "cprp/fqpn":                  "mainnet/dns:goldmansachs.com:default",
+  "cprp/fqpn":                  "mainnet:dns:goldmansachs.com:default",
   "cprp/network":               "mainnet",
   "cprp/trust-anchor":          "T1",
   "cprp/verification-method":   "dns-txt",
@@ -1827,7 +1827,7 @@ Request:
 {
   "method": "cprp.resolve",
   "params": {
-    "namespace": "goldmansachs.com",
+    "registrar": "goldmansachs.com",
     "name":      "default"
   }
 }
@@ -1839,7 +1839,7 @@ Response:
   "result": {
     "resolver_id":  "dns",
     "network":      "mainnet",
-    "namespace":    "goldmansachs.com",
+    "registrar":    "goldmansachs.com",
     "name":         "default",
     "party_id":     "party::goldman1::1220abcd...ef01",
     "credentials": [{
@@ -1944,9 +1944,9 @@ publisher: party::freename::1220cccc...0001
 subject:   party::dtcc1::1220dddd...0001
 claims: {
   "cprp/resolver":              "freename",
-  "cprp/namespace":             "dtcc.canton",
+  "cprp/registrar":             "dtcc.canton",
   "cprp/name":                  "default",
-  "cprp/fqpn":                  "mainnet/freename:dtcc.canton:default",
+  "cprp/fqpn":                  "mainnet:freename:dtcc.canton:default",
   "cprp/network":               "mainnet",
   "cprp/trust-anchor":          "T3",
   "cns-2.0/name":               "DTCC",
@@ -1958,17 +1958,14 @@ claims: {
 validUntil: 2027-01-01T00:00:00Z
 ```
 
-DTCC also publishes a self-attested (T4) credential with additional detail:
+DTCC also publishes the token-admin endpoint as a focused self-attested (T4) credential. The endpoint credential carries only the URL; profile attributes such as entity type, capabilities, or jurisdiction, when desired, are published as separate profile claims rather than bundled into the endpoint credential:
 
 ```
 publisher: party::dtcc1::1220dddd...0001
 subject:   party::dtcc1::1220dddd...0001
 claims: {
   "cprp/trust-anchor":          "T4",
-  "cprp/endpoint:token-admin":  "https://api.dtcc.com/canton/v1/token-admin",
-  "cprp/entity-type":           "custodian",
-  "cprp/capability":            "custody,settlement,issuance",
-  "cprp/jurisdiction":          "US"
+  "cprp/endpoint:token-admin":  "https://api.dtcc.com/canton/v1/token-admin"
 }
 ```
 
@@ -1981,7 +1978,7 @@ Request:
 {
   "method": "cprp.resolve",
   "params": {
-    "namespace": "dtcc.canton",
+    "registrar": "dtcc.canton",
     "name":      "default"
   }
 }
@@ -1993,7 +1990,7 @@ Response:
   "result": {
     "resolver_id":  "freename",
     "network":      "mainnet",
-    "namespace":    "dtcc.canton",
+    "registrar":    "dtcc.canton",
     "name":         "default",
     "party_id":     "party::dtcc1::1220dddd...0001",
     "credentials":  [
@@ -2010,10 +2007,7 @@ Response:
       "cns-2.0/lei":                "549300HMQBIKME8LIL78",
       "cprp/endpoint:api":          "https://api.dtcc.com/canton/v1",
       "cprp/endpoint:token-admin":  "https://api.dtcc.com/canton/v1/token-admin",
-      "cprp/endpoint:settlement":   "https://api.dtcc.com/canton/v1/settlement",
-      "cprp/entity-type":           "custodian",
-      "cprp/capability":            "custody,settlement,issuance",
-      "cprp/jurisdiction":          "US"
+      "cprp/endpoint:settlement":   "https://api.dtcc.com/canton/v1/settlement"
     },
     "confidence":   "HIGH",
     "valid_from":   "2026-03-10T09:00:00Z",
@@ -2072,7 +2066,7 @@ DTCC migrates its API to a new infrastructure. They update the credential:
 
 1. DTCC asks Freename to update the `cprp/endpoint:token-admin` claim to `https://api-v2.dtcc.com/canton/v1/token-admin`.
 2. Freename publishes a new credential and archives the previous one.
-3. The changelog reflects the update: `{ "type": "updated", "namespace": "dtcc.canton", "name": "default", ... }`.
+3. The changelog reflects the update: `{ "type": "updated", "registrar": "dtcc.canton", "name": "default", ... }`.
 4. SettleApp's next resolution (or cache refresh) picks up the new endpoint.
 5. No downtime — SettleApp follows the new URL on its next call.
 
@@ -2122,7 +2116,7 @@ The DNS resolver has a T1 credential from SV consensus:
 publisher: party::dso::1220ffff...0001
 subject:   party::acme-am::1220aaaa...0001
 claims: {
-  "cprp/resolver": "dns", "cprp/namespace": "acme-am.com", "cprp/name": "default",
+  "cprp/resolver": "dns", "cprp/registrar": "acme-am.com", "cprp/name": "default",
   "cprp/trust-anchor": "T1", "cns-2.0/name": "ACME Asset Management",
   "cprp/network": "mainnet"
 }
@@ -2133,7 +2127,7 @@ Freename has a T3 credential:
 publisher: party::freename::1220cccc...0001
 subject:   party::acme-am::1220aaaa...0001
 claims: {
-  "cprp/resolver": "freename", "cprp/namespace": "acme-am.canton",
+  "cprp/resolver": "freename", "cprp/registrar": "acme-am.canton",
   "cprp/name": "default", "cprp/trust-anchor": "T3",
   "cns-2.0/name": "ACME Asset Management", "cprp/network": "mainnet"
 }
@@ -2265,7 +2259,7 @@ JPMorgan's TradeApp resolves Barclays:
 ```json
 {
   "method": "cprp.resolve",
-  "params": { "namespace": "barclays.com", "name": "fixed-income" }
+  "params": { "registrar": "barclays.com", "name": "fixed-income" }
 }
 ```
 
@@ -2276,7 +2270,7 @@ Barclays' TradeApp resolves JPMorgan:
 ```json
 {
   "method": "cprp.resolve",
-  "params": { "namespace": "jpmorgan.com", "name": "repo-desk" }
+  "params": { "registrar": "jpmorgan.com", "name": "repo-desk" }
 }
 ```
 
@@ -2298,7 +2292,7 @@ JPMorgan publishes settlement instructions encrypted for Barclays only, using th
   "kdf_alg": "HKDF-SHA256",
   "kdf_salt": "CPRP-v1-enc-field",
   "recipients": {
-    "mainnet/dns:barclays.com:fixed-income": {
+    "mainnet:dns:barclays.com:fixed-income": {
       "kem_ct": "base64...",
       "iv":     "base64...",
       "ct":     "base64(encrypted JSON: { 'nostro_account': 'GB29NWBK60161331926819', 'bic': 'CHASGB2L', 'settlement_date': '2026-03-17T16:00:00Z', 'collateral_type': 'US-TBOND' })",
@@ -2343,7 +2337,7 @@ publisher: party::acme-hq::1220aaaa...0001
 subject:   party::acme-treasury::1220aaaa...0002
 claims: {
   "cprp/delegation":       "true",
-  "cprp/parent-fqpn":      "mainnet/dns:acme.com:default",
+  "cprp/parent-fqpn":      "mainnet:dns:acme.com:default",
   "cprp/delegated-name":   "treasury",
   "cprp/delegation-scope": "name-only",
   "cprp/network":          "mainnet"
@@ -2366,11 +2360,11 @@ A counterparty resolves `treasury.acme.com`:
 ```json
 {
   "method": "cprp.resolve",
-  "params": { "namespace": "acme.com", "name": "treasury" }
+  "params": { "registrar": "acme.com", "name": "treasury" }
 }
 ```
 
-Response includes `delegated_by: "mainnet/dns:acme.com:default"`. The resolution engine verifies the delegation chain (Section 2.7.3):
+Response includes `delegated_by: "mainnet:dns:acme.com:default"`. The resolution engine verifies the delegation chain (Section 2.7.3):
 
 ```
 treasury.acme.com → delegated by acme.com → acme.com has T1 DNS credential → chain valid ✓
@@ -2383,8 +2377,8 @@ Result:
   "party_id":         "party::acme-treasury::1220aaaa...0002",
   "status":           "VERIFIED",
   "delegation_chain": [
-    "mainnet/dns:acme.com:default",
-    "mainnet/dns:acme.com:treasury"
+    "mainnet:dns:acme.com:default",
+    "mainnet:dns:acme.com:treasury"
   ]
 }
 ```
@@ -2667,7 +2661,7 @@ CPRP SDK — The client library embedded by Canton applications.
 
 | Module | Responsibility | Key Interfaces |
 |--------|---------------|----------------|
-| Resolution Client | Executes resolution queries against configured resolvers per the app's strategy | `resolve(namespace, name)`, `reverseResolve(partyId)`, `batchResolve(queries[])` |
+| Resolution Client | Executes resolution queries against configured resolvers per the app's strategy | `resolve(registrar, name)`, `reverseResolve(partyId)`, `batchResolve(queries[])` |
 | Composition Engine | Merges results from multiple resolvers, applies LET/weight rules, detects collisions | `compose(results[], strategy) → ComposedResolutionResult` |
 | Trust Evaluator | Classifies issuers T1–T4, runs verification policy, computes VERIFIED/UNVERIFIED status | `evaluateTrust(composed, policy) → VerificationStatus` |
 | Credential Verifier | Validates credential on-ledger state (active/archived/expired) via Ledger API or Scan | `verifyCredential(contractId) → CredentialStatus` |
@@ -2690,7 +2684,7 @@ Operator Tools — Utilities for resolver operators and party administrators.
 | Tool | Purpose |
 |------|---------|
 | `cprp-cli` | Command-line tool for name registration, credential publishing, delegation management |
-| `cprp-admin` | Web dashboard for resolver operators: monitoring, changelog inspection, featured status management. *Note: Not included in initial grant milestones; targeted for community contribution or post-M4 development.* |
+| `cprp-admin` | Web dashboard for resolver operators: monitoring, changelog inspection, featured status management. *Note: Not part of the core reference implementation; targeted for community contribution or later development.* |
 | `cprp-keygen` | Kyber-768 key pair generation and secure key storage |
 
 #### B.3 Dependency Graph
@@ -2939,7 +2933,7 @@ The Resolution Service is stateless — all state is derived from on-ledger cred
 | Validator Operator | Optionally deploy CPRP Resolution Service container | Low: pull Docker image, configure Ledger API endpoint |
 | Application Developer | Add CPRP SDK dependency, configure Resolution Strategy JSON | Low: `npm install @cprp/sdk`, add config file |
 | Featured Resolver Operator (e.g., Freename) | Deploy resolver backend + CPRP sidecar, register via CIP governance | Medium: custom backend + standard sidecar |
-| Party Administrator | Register names via CLI or UI, publish credentials | Low: `cprp-cli register --namespace acme.com --name treasury` |
+| Party Administrator | Register names via CLI or UI, publish credentials | Low: `cprp-cli register --registrar acme.com --name treasury` |
 
 #### C.5 External Service Dependencies
 
@@ -2975,7 +2969,7 @@ TODAY:
 
 ```
 AFTER CPRP:
-  Party registration:   mainnet/dns:goldmansachs.com:default  (verified, credential-backed)
+  Party registration:   mainnet:dns:goldmansachs.com:default  (verified, credential-backed)
   Display:              "Goldman Sachs" ✓  (three-layer model)
   Trust:                T1 (SV consensus) + T2 (vLEI) + T3 (featured resolver)
   Resolution:           Standardized Resolver Interface, app-configured strategy
@@ -3073,238 +3067,3 @@ As CPRP adoption grows, the Working Group may propose deprecating CNS 1.0 regist
 | SV nodes have extra work | Minimal: DNS verification is automated; featured resolver votes are infrequent |
 | Party administrators confused | `cprp-cli upgrade` provides guided, step-by-step migration |
 | ACS bloat from duplicate entries | CNS 1.0 entries and CPRP credentials are separate contracts; total ACS impact is quantified in Section 11.6 |
-
-
-### Appendix E: Milestone Deliverables Matrix
-
-This appendix maps each grant milestone to specific software components from the architecture (Appendix B), infrastructure requirements (Appendix C), and CIP specification sections.
-
-> Grant structure note: The CPRP implementation is funded via two separate grants submitted to the Canton Protocol Development Fund:
-> - Grant A — Party Name Resolution ($250,000): Milestones A1, A2, A3 (~30 weeks)
-> - Grant B — Party Identity Verification ($200,000): Milestones B1, B2, B3 (~28 weeks)
->
-> Grants are designed to be independently valuable (Grant A delivers human-readable names even without verification) but architecturally connected (Grant B extends Grant A's resolver infrastructure). B1 runs in parallel with A2. Total program duration: ~35 weeks with parallelism.
->
-> The milestone descriptions below use the combined view. See the individual grant proposals for per-grant milestone mapping, exit criteria, and verification methods.
-
-#### E.1 Milestone A1 — CIP & Resolution Architecture ($50,000 / 6 weeks)
-
-```
-MILESTONE A1 DELIVERABLES (Grant A)
-+=================================================================+
-|  Deliverable            | Spec Section | Architecture Component |
-+=================================================================+
-|  Draft CIP-XXXX (Party  | §1–§3, §14  | —                      |
-|    Name Resolution)     |              |                        |
-|  FQPN specification     | §1.1         | cprp-core types        |
-|  Resolver Interface def | §2           | cprp-resolver-api      |
-|  Resolution Strategy    | §3           | cprp-composition       |
-|    schema               |              |   module               |
-|  Daml contracts (draft) | §11.2, §11.3 | cprp-daml package      |
-|    (Registration +      |              |                        |
-|     Delegation)         |              |                        |
-|  Address book spec      | §2.6         | cprp-resolver-ab       |
-|  Collision mgmt spec    | §8           | cprp-composition       |
-|  WG presentation        | —            | —                      |
-+=================================================================+
-  EXIT: CIP-XXXX accepted to "Proposed" status by the WG.
-```
-
-#### E.2 Milestone A2 — Resolver Prototype ($120,000 / 14 weeks)
-
-```
-MILESTONE A2 DELIVERABLES (Grant A)
-+=================================================================+
-|  Deliverable              | Spec Section | Architecture          |
-+=================================================================+
-|  cprp-core package        | §1           | Foundation types,     |
-|                           |              |   FQPN parser,        |
-|                           |              |   network disc.       |
-|  cprp-resolver-api        | §2           | Plugin interface,     |
-|    package                |              |   error codes,        |
-|                           |              |   JSON schemas        |
-|  cprp-resolver-dns        | §10.1        | DNS resolver plugin   |
-|    plugin                 |              |   + DNSSEC validation |
-|  cprp-resolver-cn-cred    | §4           | CN Credential plugin  |
-|    plugin                 |              |   + Scan integration  |
-|  cprp-resolver-addressbook| §2.6         | Address book plugin   |
-|    plugin                 |              |   (local DB backend)  |
-|  cprp-composition         | §3           | Composition engine,   |
-|    module                 |              |   collision detection |
-|  cprp-cache module        | §3.6         | TTL cache, changelog  |
-|                           |              |   subscription        |
-|  cprp-service             | §12          | Resolution Service    |
-|    (basic)                |              |   (HTTPS, basic API)  |
-|  cprp-daml contracts      | §11          | On-ledger templates   |
-|    (deployed to testnet)  |              |   deployed + tested   |
-|  CNS 1.0 wrapper plugin   | App. D       | cns-v1 resolver       |
-|                           |              |   plugin              |
-|  TestNet deployment       | —            | Docker image +        |
-|                           |              |   deployment scripts  |
-|  Performance benchmarks   | —            | Load test suite       |
-+=================================================================+
-  EXIT: WG confirms prototype resolves names to parties on TestNet.
-        50+ test parties, 2+ resolver types. <100ms p95 latency.
-
-  INFRASTRUCTURE: Option A (standalone container on testnet)
-```
-
-#### E.3 Milestone A3 — Resolution SDK & Adoption ($80,000 / 10 weeks)
-
-```
-MILESTONE A3 DELIVERABLES (Grant A)
-+=================================================================+
-|  Deliverable              | Spec Section | Architecture          |
-+=================================================================+
-|  @cprp/sdk (TypeScript)   | All §1–§3    | Resolution client,    |
-|                           |              |   composition, cache  |
-|                           |              |   npm published       |
-|  cprp-sdk (Python)        | All §1–§3    | Python SDK,           |
-|                           |              |   pip published       |
-|  com.cprp:cprp-sdk (Java) | All §1–§3    | Java SDK,             |
-|                           |              |   Maven published     |
-|  cprp-cli tool            | —            | Registration, upgrade,|
-|                           |              |   delegation mgmt     |
-|  Integration guide        | —            | Step-by-step for      |
-|                           |              |   app developers      |
-|  Migration guide          | App. D       | CNS 1.0 → CPRP       |
-|                           |              |   upgrade path        |
-|  Reference wallet app     | Flows 1,7    | Resolution +          |
-|                           |              |   address book demo   |
-|  Adoption support         | —            | Office hours, WG      |
-+=================================================================+
-  EXIT: 2+ Canton ecosystem apps integrated resolution SDK
-        in testnet or staging environment.
-
-  INFRASTRUCTURE: SDK is client-side only — no new infra.
-```
-
-#### E.4 Milestone B1 — CIP & Verification Architecture ($40,000 / 6 weeks)
-
-```
-MILESTONE B1 DELIVERABLES (Grant B)
-+=================================================================+
-|  Deliverable              | Spec Section | Architecture          |
-+=================================================================+
-|  Draft CIP-YYYY (Party    | §5–§6, §9   | —                     |
-|    Identity Verification) |              |                       |
-|  Trust tier model spec    | §5           | cprp-trust module     |
-|    (T1–T4 classification) |              |                       |
-|  Verification policy      | §3.2 (policy)| cprp-trust            |
-|    schema                 |              |                       |
-|  Credential mapping spec  | §4.3         | cprp-core types       |
-|    (cprp/* claim keys)    |              |                       |
-|  Encrypted field crypto   | §6           | cprp-crypto module    |
-|    specification          |              |                       |
-|  Daml contracts (draft)   | §11.4, §11.5 | cprp-daml             |
-|    (FeaturedStatus +      |              |                       |
-|     Arbitration)          |              |                       |
-|  WG presentation          | —            | —                     |
-+=================================================================+
-  EXIT: CIP-YYYY accepted to "Proposed" status by the WG.
-
-  NOTE: B1 can begin in parallel with A2 (CIP design does not
-  depend on the resolver prototype).
-```
-
-#### E.5 Milestone B2 — Verification Implementation ($110,000 / 14 weeks)
-
-```
-MILESTONE B2 DELIVERABLES (Grant B)
-+=================================================================+
-|  Deliverable              | Spec Section | Architecture          |
-+=================================================================+
-|  cprp-trust module        | §5           | Trust evaluator,      |
-|                           |              |   issuer classifier,  |
-|                           |              |   policy engine       |
-|  cprp-resolver-vlei       | §10.2        | vLEI resolver plugin  |
-|    plugin                 |              |   + GLEIF API client  |
-|  DNS verification flow    | §10.1        | Phase 1: featured     |
-|    (Phase 1)              |              |   resolver quorum,    |
-|                           |              |   CnsDnsClaim cred.   |
-|                           |              |   lifecycle           |
-|  Scan integration         | §13          | Changelog consumer,   |
-|    (profile pages)        |              |   3-layer display     |
-|                           |              |   model in Scan       |
-|  Cross-chain claims       | §9           | Ethereum sig verify,  |
-|    (basic)                |              |   ENS TXT verify      |
-|  Name delegation (full)   | §2.7, §11.3  | Delegation contracts, |
-|                           |              |   chain verification  |
-|  cprp-service (production)| §12          | Full API: batch,      |
-|                           |              |   gRPC, mTLS,         |
-|                           |              |   rate limiting       |
-|  Network discriminator    | §1.1         | MainNet/TestNet/      |
-|    enforcement            |              |   DevNet separation   |
-|  Collision arbitration    | §8.5, §11.5  | CollisionArbitration  |
-|    contracts              |              |   Daml + governance   |
-|  Explorer demo            | §13          | Scan showing verified |
-|                           |              |   names + profiles    |
-|  Privacy review           | Security §   | Query privacy audit,  |
-|                           |              |   threat model doc    |
-+=================================================================+
-  EXIT: E2E demo — app resolves name → verified party →
-        executes Canton transaction using resolved identity.
-        Scan shows verified name + profile for demo parties.
-
-  DEPENDENCY: Begins after A2 delivers resolver infrastructure.
-  INFRASTRUCTURE: Option A → Option B evaluation begins.
-```
-
-#### E.6 Milestone B3 — Verification SDK & Adoption ($50,000 / 8 weeks)
-
-```
-MILESTONE B3 DELIVERABLES (Grant B)
-+=================================================================+
-|  Deliverable              | Spec Section | Architecture          |
-+=================================================================+
-|  Verification extensions  | §5           | Trust evaluator API,  |
-|    to all 3 SDKs          |              |   cred verifier API   |
-|    (TS, Python, Java)     |              |                       |
-|  Reference custody app    | Flows 1–3    | Resolution +          |
-|                           |              |   verification demo   |
-|                           |              |   between             |
-|                           |              |   counterparties      |
-|  Architecture guide       | App. B       | Component docs,       |
-|                           |              |   API reference       |
-|  Operational playbook     | App. C       | Deployment guide for  |
-|                           |              |   resolver operators  |
-|  Verification guide       | —            | Trust policies,       |
-|                           |              |   vLEI setup          |
-|  Adoption support         | —            | Office hours, WG,     |
-|                           |              |   early adopters      |
-+=================================================================+
-  EXIT: 1+ Canton ecosystem app integrated verification SDK
-        extensions in testnet or staging environment.
-
-  INFRASTRUCTURE: SDK is client-side only.
-```
-
-#### E.7 Timeline Summary
-
-```
-GRANT A (Resolution — $250k):
-WEEK:  1-----5-----10-----15-----20-----25-----30
-       | A1  |          A2          |     A3     |
-       |$50k |        $120k        |    $80k    |
-
-GRANT B (Verification — $200k):
-WEEK:  1-----5-----10-----15-----20-----25-----30-----35
-                    | B1  |          B2          |  B3  |
-                    |$40k |        $110k         | $50k |
-
-COMBINED VIEW (with parallelism):
-WEEK:  1-----5-----10-----15-----20-----25-----30-----35
-       | A1  |  A2 + B1  |    A2    |  A3 + B2  |A3+B3|
-       |     |  parallel |          |  parallel  |     |
-
-KEY DELIVERABLES:
-  CIP-XXXX draft-------+ (W6)
-                  CIP-YYYY draft---+ (W12)
-       Resolver prototype on TestNet---------+ (W20)
-                  Resolution SDK published-----------+ (W25)
-                         E2E demo + Scan integration----------+ (W30)
-                                  Full adoption package--------------+ (W35)
-
-  TOTAL: $450,000 across 2 grants                              DONE-+
-```
-
