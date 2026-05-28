@@ -6,9 +6,9 @@ Author(s): Paolo Domenighetti (Freename AG)
 
 Status: Draft
 
-Created: 2026-05-27
+Created: 2026-05-28
 
-Post-History: Canton Identity and Metadata Working Group (Jan–Feb 2026)
+Post-History: Canton Identity and Metadata Working Group (Jan–May 2026)
 
 Requires: CIP-XXXX (Party Name Resolution), CN Credentials Standard (CIP TBD)
 
@@ -73,7 +73,7 @@ Every credential issuer is classified into one of four tiers based on its author
 
 | Tier | Authority Source | Governance | Weight Range | Examples |
 |------|-----------------|-----------|-------------|---------|
-| T1 | DSO / SV Consensus | On-ledger SV vote | 1.0 | SV-verified DNS claims, CollisionArbitration |
+| T1 | DSO / SV Consensus | On-ledger SV vote | 1.0 | SV-verified DNS claims |
 | T2 | Regulated Identity Providers | External regulatory framework | 0.8–0.95 | GLEIF vLEI issuers, national KYC registries |
 | T3 | Featured Resolvers | SV governance vote (annual renewal) | 0.6–0.8 | Freename, 7Trust, any SV-approved resolver |
 | T4 | Self-Attestation | None (party attests about itself) | 0.1–0.3 | Party-published profile, endpoints, capabilities |
@@ -231,9 +231,9 @@ Verification-layer data is encoded as standard CN Credentials — no custom Daml
 
 Featured resolver status is a credential where publisher = DSO party, subject = resolver operator party. Claims include `cprp/featured-resolver: true`, `cprp/featured-since`, `cprp/featured-cip` (the CIP number that approved featured status), `cprp/featured-registrars`, and `cprp/featured-renewal` (renewal deadline). Revocation is modeled as credential archival by the DSO. Annual renewal publishes a new credential with updated deadline.
 
-### CollisionArbitration (as credential)
+### CollisionArbitration (deferred)
 
-Governance decisions on disputed name mappings are credentials where publisher = DSO party, subject = the disputed party. Claims include `cprp/arbitrated-name`, `cprp/arbitration-decision`, `cprp/arbitration-rationale`, and `cprp/arbitrated-at`. Published as T1 authority. Superseding a previous decision archives the old credential and publishes a new one.
+Governance-based arbitration of disputed name mappings across featured resolvers is deferred to the future governance CIP (registrar governance and dispute resolution). This CIP defines the trust tiers and collision detection that surface a dispute, but not the on-ledger arbitration decision. The credential encoding for binding arbitration decisions will be specified by that CIP.
 
 
 ## Rationale
