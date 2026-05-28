@@ -6,7 +6,7 @@ Author(s): Paolo Domenighetti (Freename AG)
 
 Status: Draft
 
-Created: 2026-03-02
+Created: 2026-05-27
 
 Post-History: Canton Identity and Metadata Working Group (Jan–Feb 2026)
 
@@ -102,10 +102,10 @@ CPRP defines standardized claim keys under the `cprp/` authority prefix:
 | Claim Key | Purpose | Set By |
 |-----------|---------|--------|
 | `cprp/resolver` | Resolver that produced this credential | Resolver |
-| `cprp/namespace` | Namespace within the resolver | Resolver |
+| `cprp/registrar` | Registrar within the resolver | Resolver |
 | `cprp/name` | Registered name | Resolver |
 | `cprp/trust-anchor` | Issuer tier and authority chain | Resolver |
-| `cprp/network` | Network discriminator (mainnet/testnet/devnet) | Resolver |
+| `cprp/network` | Network discriminator (mainnet:testnet:devnet) | Resolver |
 | `cprp/endpoint:<service>` | Off-ledger API endpoint URL | Party (self-attested) |
 | `cprp/enc-field:<field>` | Encrypted field envelope | Party (reserved; defined in follow-up CIP — encrypted fields deferred from this CIP) |
 | `cprp/delegation` | Delegation authorization | Parent party |
@@ -229,7 +229,7 @@ Verification-layer data is encoded as standard CN Credentials — no custom Daml
 
 ### ResolverFeaturedStatus (as credential)
 
-Featured resolver status is a credential where publisher = DSO party, subject = resolver operator party. Claims include `cprp/featured-resolver: true`, `cprp/featured-since`, `cprp/featured-cip` (the CIP number that approved featured status), `cprp/featured-namespaces`, and `cprp/featured-renewal` (renewal deadline). Revocation is modeled as credential archival by the DSO. Annual renewal publishes a new credential with updated deadline.
+Featured resolver status is a credential where publisher = DSO party, subject = resolver operator party. Claims include `cprp/featured-resolver: true`, `cprp/featured-since`, `cprp/featured-cip` (the CIP number that approved featured status), `cprp/featured-registrars`, and `cprp/featured-renewal` (renewal deadline). Revocation is modeled as credential archival by the DSO. Annual renewal publishes a new credential with updated deadline.
 
 ### CollisionArbitration (as credential)
 
@@ -273,10 +273,10 @@ Why credential-native: Using the existing CN Credentials interface means CPRP ve
 
 ## Implementation
 
-A reference implementation is proposed as a Canton Protocol Development Fund grant (PR to `canton-dev-fund`). The verification layer is delivered across milestones B1 (CIP design + trust model), B2 (trust evaluator + vLEI + DNS verification + Scan integration), and B3 (verification SDK extensions + reference custody app) — see Grant B: Party Identity Verification ($200k). B1 runs in parallel with the resolution grant's A2 milestone.
+A reference implementation is proposed separately as a Canton Protocol Development Fund grant (PR to `canton-dev-fund`). Funding scope, milestones, and budget are defined in that grant proposal and are intentionally kept out of this CIP, so that standards review and funding review remain independent.
 
 
 ## Companion Documents
 
 - CIP-XXXX: Party Name Resolution — FQPN format, resolver interface, resolution strategy, composition engine, address books, name delegation, display model
-- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, migration, and milestones.
+- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, and migration.
