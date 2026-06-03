@@ -2,7 +2,7 @@
 
 | Field | Value |
 | :---- | :---- |
-| **CIP** | CIP-TBD |
+| **CIP** | CIP-0117 |
 | **Title** | Logical Synchronizers |
 | **Author** | Wayne Collier Moritz Kiefer Rafael Guglielmetti |
 |  |  |
