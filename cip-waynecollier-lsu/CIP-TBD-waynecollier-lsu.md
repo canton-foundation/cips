@@ -71,6 +71,7 @@ Minimum Allowed Splice version: 0.6.5
 
 * Set topologyFreezeTime to 2026-06-02T13:00:00Z  
 * Set upgradeTime to 2026-06-03T13:00:00Z  
+
 * Set newPhysicalSynchronizerSerial to 2  
 * Set newPhysicalSynchronizerProtocolVersion to "34"
 
@@ -82,6 +83,7 @@ Minimum Allowed Splice version: 0.6.5
 
 * Set topologyFreezeTime to 2026-06-09T13:00:00Z  
 * Set upgradeTime to 2026-06-10T13:00:00Z  
+
 * Set newPhysicalSynchronizerSerial to 3  
 * Set newPhysicalSynchronizerProtocolVersion to "35"
 
@@ -94,6 +96,7 @@ Then, at the scheduled topology freeze time, the automated LSU procedure begins.
 Logical Synchronizer Upgrade Date: **2026-06-10**
 
 Minimum Allowed Splice version: 0.6.5    
+
 
 * Set topologyFreezeTime to 2026-06-09T13:00:00Z  
 * Set upgradeTime to 2026-06-10T13:00:00Z  
@@ -112,6 +115,7 @@ Minimum Allowed Splice version: 0.6.5
 
 * Set topologyFreezeTime to 2026-06-26T13:00:00Z  
 * Set upgradeTime to 2026-06-27T13:00:00Z  
+
 * Set newPhysicalSynchronizerSerial to 5  
 * Set newPhysicalSynchronizerProtocolVersion to "35"
 
