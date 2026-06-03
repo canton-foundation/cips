@@ -65,23 +65,23 @@ Daml Model Votes
 
 [Daml models from 0.6.2](https://docs.dev.sync.global/release_notes.html) become effective on **2026-05-19**
 
-**Practice** Logical Synchronizer Upgrade Date: **2026-05-27**
+**Practice** Logical Synchronizer Upgrade Date: **2026-06-03**
 
-Minimum Allowed Splice version: 0.6.4 
+Minimum Allowed Splice version: 0.6.5 
 
-* Set topologyFreezeTime to 2026-05-26T13:00:00Z  
-* Set upgradeTime to 2026-05-27T13:00:00Z  
+* Set topologyFreezeTime to 2026-06-02T13:00:00Z  
+* Set upgradeTime to 2026-06-03T13:00:00Z  
 * Set newPhysicalSynchronizerSerial to 2  
 * Set newPhysicalSynchronizerProtocolVersion to "34"
 
 Then, at the scheduled topology freeze time, the automated LSU procedure begins.
 
-Logical Synchronizer Upgrade Date: **2026-06-03**
+**Official** Logical Synchronizer Upgrade Date: **2026-06-10**
 
-Minimum Allowed Splice version: 0.6.4 
+Minimum Allowed Splice version: 0.6.5 
 
-* Set topologyFreezeTime to 2026-06-02T13:00:00Z  
-* Set upgradeTime to 2026-06-03T13:00:00Z  
+* Set topologyFreezeTime to 2026-06-09T13:00:00Z  
+* Set upgradeTime to 2026-06-10T13:00:00Z  
 * Set newPhysicalSynchronizerSerial to 3  
 * Set newPhysicalSynchronizerProtocolVersion to "35"
 
@@ -93,7 +93,7 @@ Then, at the scheduled topology freeze time, the automated LSU procedure begins.
 
 Logical Synchronizer Upgrade Date: **2026-06-10**
 
-Minimum Allowed Splice version: 0.6.4 
+Minimum Allowed Splice version: 0.6.5    
 
 * Set topologyFreezeTime to 2026-06-09T13:00:00Z  
 * Set upgradeTime to 2026-06-10T13:00:00Z  
@@ -104,14 +104,14 @@ Then, at the scheduled topology freeze time, the automated LSU procedure begins.
 
 **MainNet**
 
-[Daml models from 0.6.2](https://docs.dev.sync.global/release_notes.html) become effective on **2026-06-02**
+[Daml models from 0.6.2](https://docs.dev.sync.global/release_notes.html) become effective on **2026-06-09**
 
-Logical Synchronizer Upgrade Date: **2026-06-20**
+Logical Synchronizer Upgrade Date: **2026-06-27**
 
-Minimum Allowed Splice version: 0.6.4
+Minimum Allowed Splice version: 0.6.5
 
-* Set topologyFreezeTime to 2026-06-19T13:00:00Z  
-* Set upgradeTime to 2026-06-20T13:00:00Z  
+* Set topologyFreezeTime to 2026-06-26T13:00:00Z  
+* Set upgradeTime to 2026-06-27T13:00:00Z  
 * Set newPhysicalSynchronizerSerial to 5  
 * Set newPhysicalSynchronizerProtocolVersion to "35"
 
