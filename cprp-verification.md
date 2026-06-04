@@ -1,282 +1,229 @@
 Number: CIP-YYYY
 
-Title: Canton Party Resolution Protocol (CPRP) - Party Identity Verification
-
-Author(s): Paolo Domenighetti (Freename AG)
+Title: Canton Party Identity Verification — Trust Framework
 
 Status: Draft
 
-Created: 2026-05-28
+Author: Paolo Domenighetti (Freename)
 
-Post-History: Canton Identity and Metadata Working Group (Jan–May 2026)
+Created: 2026-05-31
 
-Requires: CIP-XXXX (Party Name Resolution), CN Credentials Standard (CIP TBD)
+## Abstract
 
-Related: CIP-XXXX (Party Name Resolution)
+This CIP defines the trust framework that determines whether a resolved Canton party identity qualifies as "verified" — the condition for removing the `.unverified` prefix carried by self-registered CNS 1.0 names. It specifies a four-tier classification of credential issuers (T1–T4), an application-configurable verification policy schema, a trust evaluation algorithm that yields a `VERIFIED` / `PARTIAL` / `UNVERIFIED` / `COLLISION` / `ERROR` judgment, the featured-resolver registry governed by Super Validator (SV) vote that grants T3 issuer status, and the revocation semantics that bound how quickly trust changes propagate.
 
-
-## Summary
-
-This CIP defines the verification layer of the Canton Party Resolution Protocol (CPRP): the trust model, issuer classification, verification policies, and cryptographic mechanisms that determine whether a resolved party name qualifies as verified — the condition for removing the `.unverified` prefix.
-
-The protocol introduces:
-
-- A four-tier issuer classification (T1: SV consensus, T2: regulated providers, T3: featured resolvers, T4: self-attestation)
-- Application-configurable verification policies where each app defines its minimum trust requirements
-- A trust evaluation algorithm that checks credential on-ledger state, classifies issuers, and computes verification status
-- Credential mapping to the CN Credentials Daml interface with standardized claim key conventions
-- DNS verification flow via DNSSEC + TXT records — Phase 1 with featured resolver quorum (T3), Phase 2 with SV consensus (T1)
-- vLEI verification flow via GLEIF API with QVI issuer validation
-- Post-quantum encrypted fields for recipient-specific confidential metadata (deferred to follow-up CIP; cryptographic design documented)
-- Cross-chain identity linking for Ethereum, ENS, SWIFT, and other external identifiers
-- A Featured Resolver Registry governed by SV vote for T3 status
-- Revocation semantics with mandatory propagation timelines
-
-This CIP builds on CIP-XXXX (Party Name Resolution), which defines the naming format, resolver interface, resolution strategy, and composition engine. CIP-XXXX resolves names to Party IDs; this CIP determines whether those resolutions can be trusted.
-
-A shared technical specification accompanies both CIPs: [CPRP-spec.md](./CPRP-spec.md).
-
+This CIP does not define the resolution interface, the FQPN format, the composition engine, or the display model (specified in CIP-XXXX, Party Name Resolution). It does not specify per-source verification procedures such as DNS validation or vLEI verification (specified in CIP-ZZZZ, Imported Names). It does not define Canton-native naming or the `.canton` namespace (specified in the `.canton` CIP led by Axymos). It defines only the trust framework that all of those CIPs declare into and consume.
 
 ## Motivation
 
-### The Verification Problem
+The Identity and Metadata Working Group's central framing question — "How do we remove the `.unverified` prefix?" — is fundamentally a trust question. CNS 1.0 names are first-come-first-serve with no ownership check, so a resolved name like `goldmansachs.unverified.cns` conveys no signal about whether it actually belongs to Goldman Sachs.
 
-Multi-resolver resolution (CIP-XXXX) produces name-to-party mappings, but without a trust framework, any mapping is as credible as any other. Anyone can register `goldmansachs` on a permissionless resolver — this is the same fundamental limitation as CNS 1.0, where names take the form `name.unverified.cns` (as defined in the CNS 2.0 design document) because there is no ownership validation beyond payment. The `.unverified` infix exists precisely because CNS 1.0 cannot verify that a name belongs to the entity it claims to represent.
+A workable answer must:
 
-Applications need a standardized way to evaluate whether a resolved identity is trustworthy enough for their use case — this is fundamentally a verification question, not a resolution question. The Identity and Metadata Working Group has identified this as a priority: "How do we remove the `.unverified` prefix?"
+- Be uniform across applications, so that "verified" means the same thing in a block explorer, a settlement system, and a compliance tool.
+- Be configurable per application, because different applications legitimately have different risk tolerances (an explorer accepts more than a settlement system).
+- Compose with multiple identity sources at once (DNS, vLEI, ENS, native Canton naming) without locking the framework to any one.
+- Be governance-light, requiring SV votes only at the boundary where authority is granted (featured resolvers) and not in normal-path operation.
 
-### Multi-Issuer Reality
+Without this framework, every resolver and every application reinvents trust, and credentials issued by different operators have no comparable basis. This CIP fixes the trust vocabulary so the rest of the stack — resolution (CIP-XXXX), imported names (CIP-ZZZZ), Canton-native naming (`.canton` CIP), and party profiles (CIP-169 from PixelPlex) — can coordinate.
 
-Canton operates in a multi-jurisdictional financial ecosystem where no single identity authority serves all participants. A US bank verifies via SEC CRD numbers. A European bank verifies via LEI. A crypto-native firm verifies via ENS or Ethereum signatures. Verification must compose trust from multiple independent sources rather than depending on a single root.
+## Specification
 
-### Application-Driven Trust
+### 1. Scope
 
-The Working Group explicitly rejected a foundation-mandated trust standard. Different applications have different risk tolerances: a block explorer might accept any name, while a settlement system requires vLEI + DNS verification. This CIP implements the "apps decide" principle for verification, just as CIP-XXXX implements it for resolution.
+This CIP specifies:
 
-### Why Separate from Resolution
+- The four trust tiers (T1–T4) and the criteria for issuing credentials at each tier.
+- The verification policy schema by which an application declares its trust requirements.
+- The trust evaluation algorithm that combines a composed resolution result (from CIP-XXXX) with an application's policy to produce a trust verdict.
+- The featured-resolver registry, the SV governance vote that grants T3 issuer status, and the renewal cadence.
+- The `ResolverFeaturedStatus` credential that encodes featured-resolver status on-ledger.
+- Revocation semantics — the maximum time bounds for credential expiry, issuer revocation, and featured-status revocation to take effect.
 
-Resolution and verification are separable concerns:
+The following are explicitly out of scope and deferred to other CIPs:
 
-- Resolution answers: "What Party ID does this name point to?"
-- Verification answers: "Should I trust this mapping?"
+- Per-source verification procedures (DNSSEC mechanics, GLEIF queries, ENS resolution) — CIP-ZZZZ.
+- The resolver interface and composition engine — CIP-XXXX.
+- Encrypted-field cryptography — deferred to a follow-up CIP; a design summary is retained in Section 8.
+- Governance-based arbitration of disputed names across featured resolvers — deferred to the future governance CIP.
 
-An application might resolve a name without verifying it (e.g., displaying a Party ID hint in an explorer). Or it might verify a Party ID through a credential check without going through name resolution at all (e.g., validating a vLEI for a known counterparty). Keeping them separate follows the single-responsibility principle and enables independent evolution.
+### 2. Trust Tiers
 
+Every credential consumed by trust evaluation MUST declare a tier via the `cprp/trust-anchor` claim. Tiers are assigned by the issuing authority and reflect the credential's authority source, not the publishing intermediary's reputation.
 
-## Specification Overview
+| Tier | Authority Source | Granted By | Weight Range | Example Issuers |
+|------|------------------|------------|--------------|-----------------|
+| T1 | DSO / SV Consensus | On-ledger SV vote | 1.0 | SV-verified DNS claims (future); DSO arbitration credentials (future governance CIP) |
+| T2 | Regulated identity authority | External regulation (GLEIF, KYC registry, national ID) | 0.7–0.9 | vLEI issued under GLEIF; KYC-verified credentials from regulated providers |
+| T3 | Featured resolver | SV governance vote (annual renewal) | 0.4–0.6 | Featured-resolver DNS verifications; featured-resolver ENS verifications; featured-resolver native registrations |
+| T4 | Self-attested | None | 0.1–0.2 | Party-published profile claims; unverified LEI lookups; self-attested SWIFT BIC |
 
-The full specification is in the shared companion document [CPRP-spec.md](./CPRP-spec.md). This section summarizes the verification-layer design elements.
+#### 2.1 Tier Issuance Rules
 
-### Trust Tier Classification
+- T1 credentials are issued only by the DSO party as a result of on-ledger SV consensus.
+- T2 credentials are issued by featured resolvers (T3) when the resolver acts as a faithful conduit for an external regulated authority's attestation (e.g. a GLEIF vLEI status check). The T2 tier reflects the external authority's trust, not the resolver's.
+- T3 credentials are issued by featured resolvers under their own authority for the specific verification methods they are featured for (declared in their `cprp/featured-resolver` credential).
+- T4 credentials are issued by any party, including a party publishing claims about itself.
 
-Every credential issuer is classified into one of four tiers based on its authority source:
+A resolver that is not featured (T3) MUST NOT issue T1 or T2 credentials. A featured resolver issuing a T2 credential MUST cite the external authority's attestation evidence in the credential's claims.
 
-| Tier | Authority Source | Governance | Weight Range | Examples |
-|------|-----------------|-----------|-------------|---------|
-| T1 | DSO / SV Consensus | On-ledger SV vote | 1.0 | SV-verified DNS claims |
-| T2 | Regulated Identity Providers | External regulatory framework | 0.8–0.95 | GLEIF vLEI issuers, national KYC registries |
-| T3 | Featured Resolvers | SV governance vote (annual renewal) | 0.6–0.8 | Freename, 7Trust, any SV-approved resolver |
-| T4 | Self-Attestation | None (party attests about itself) | 0.1–0.3 | Party-published profile, endpoints, capabilities |
+### 3. Verification Policies
 
-The tier determines the default weight in composition (CIP-XXXX) and the verification status in trust evaluation. Higher tiers require stronger governance: T1 requires active SV consensus, T2 requires external regulatory verification, T3 requires periodic SV renewal votes.
+A verification policy is an application-specific JSON document declaring how that application converts a composed resolution result into a trust verdict. The policy is part of the broader Resolution Strategy specified in CIP-XXXX; the verification portion is normative for this CIP.
 
-T2 classification note: T2 reflects the trust authority of the *verification source* (GLEIF, SEC, national KYC registry), not of the intermediary resolver that publishes the credential. A featured resolver (T3) that verifies a party against the GLEIF API publishes a T2 credential because the trust anchor is GLEIF (a regulated body under EU/US oversight), not the resolver itself. Analogy: a notary (T3) issues a document that carries the authority of a government registry (T2) when they've verified against that registry — the notary doesn't become T2, but the credential carries T2 trust because the verification source is T2. The publishing resolver MUST be at least T3 to issue T2 credentials.
+#### 3.1 Policy Schema
 
-### Credential Mapping
-
-All CPRP verification data uses the CN Credentials Daml interface:
-
-```daml
-interface Credential with viewtype = CredentialView
-  publisher : Party        -- issuer / resolver operator
-  subject   : Party        -- the party being described
-  holder    : Party        -- typically same as subject (party holds their own credential)
-  claims    : Map Text Text -- key-value claims
-  validUntil : Optional Time
 ```
-
-For name credentials: publisher = resolver, subject = registered party, holder = registered party. For delegations: publisher = parent party, subject = child party, holder = child party.
-
-CPRP defines standardized claim keys under the `cprp/` authority prefix:
-
-| Claim Key | Purpose | Set By |
-|-----------|---------|--------|
-| `cprp/resolver` | Resolver that produced this credential | Resolver |
-| `cprp/registrar` | Registrar within the resolver | Resolver |
-| `cprp/name` | Registered name | Resolver |
-| `cprp/trust-anchor` | Issuer tier and authority chain | Resolver |
-| `cprp/network` | Network discriminator (mainnet:testnet:devnet) | Resolver |
-| `cprp/endpoint:<service>` | Off-ledger API endpoint URL | Party (self-attested) |
-| `cprp/enc-field:<field>` | Encrypted field envelope | Party (reserved; defined in follow-up CIP — encrypted fields deferred from this CIP) |
-| `cprp/delegation` | Delegation authorization | Parent party |
-| `cprp/chain-id:<chain>` | Cross-chain identity link | Party |
-
-Profile claims (`cns-2.0/name`, `cns-2.0/avatar`, etc.) and social contact claims (`cprp/social:<platform>`) are defined in CIP-XXXX (Party Name Resolution). They are informational only and MUST NOT be interpreted as verified identity attributes. Verification status is determined exclusively by the trust evaluation algorithm defined in this CIP.
-
-Cross-CIP note: Extended metadata claims (`cprp/jurisdiction`, `cprp/entity-type`, `cprp/capability`, `cprp/chain-id:*`) are defined in the shared specification and used by both CIP-XXXX (for profile display and endpoint discovery) and this CIP (for verification context). Neither CIP exclusively owns these claims.
-
-Third-party resolvers use their DNS domain as the authority prefix (e.g., `freename.com/collision-score`), following K8s-style annotation conventions.
-
-### Claim Key Registry Conventions
-
-Claim keys follow the `<authority>/<key>` format:
-
-| Authority | Governance | Examples |
-|-----------|-----------|---------|
-| `cprp/` | This CIP (protocol-level) | `cprp/resolver`, `cprp/trust-anchor` |
-| `cns-2.0/` | CNS 2.0 specification | `cns-2.0/name`, `cns-2.0/lei` |
-| `<domain>/` | Domain owner (third-party) | `freename.com/verified-since` |
-
-New `cprp/` keys require a CIP. New `cns-2.0/` keys follow the CNS 2.0 governance. Third-party keys are permissionless.
-
-### Trust Evaluation Algorithm
-
-Given a `ComposedResolutionResult` from CIP-XXXX's composition engine, the trust evaluator:
-
-1. For each credential in the result, verifies on-ledger state (active, archived, expired) as a defense-in-depth check. Note: resolvers SHOULD filter to active credentials at query time; the trust evaluator re-verifies as a safety net for edge cases where credentials are archived between cache refresh and evaluation.
-2. Classifies each issuer into T1–T4 based on publisher identity and on-ledger status
-2. Classifies the credential's issuer into T1/T2/T3/T4
-3. Applies the application's `VerificationPolicy`:
-
-```json
 {
-  "minimum_tier": "T3",
-  "required_credential_types": ["dns_claim"],
-  "reject_if_any": ["revoked"],
-  "required_active_credentials": 1
+  "verification_policy": {
+    "minimum_tier"         : "T2",
+    "minimum_resolvers"    : 1,
+    "minimum_total_weight" : 0.7,
+    "require_methods"      : ["dns", "vlei"],
+    "collision_handling"   : "strict" | "permissive",
+    "expiry_grace_period"  : "PT0S"
+  }
 }
 ```
 
-4. Returns a `VerificationStatus`: `VERIFIED`, `PARTIAL`, `UNVERIFIED`, `COLLISION`, or `ERROR`
+- `minimum_tier`: the lowest tier credential that may contribute to a `VERIFIED` verdict.
+- `minimum_resolvers`: the minimum number of distinct featured resolvers (or higher-tier issuers) that must agree on the binding.
+- `minimum_total_weight`: the minimum cumulative weight (per the tier ranges in Section 2) required.
+- `require_methods`: optional list of `cprp/verification-method` values that MUST be present.
+- `collision_handling`: per CIP-XXXX collision policy.
+- `expiry_grace_period`: ISO-8601 duration; how long past `cprp/valid-until` an otherwise-valid credential may still contribute.
 
-`PARTIAL` is returned when at least one resolver confirms the identity but cumulative weight is below the policy's `min_total_weight` threshold (specifically: weight ≥ 50% of threshold but < threshold). Applications SHOULD display a partial verification indicator and allow the user to inspect the trust path.
+#### 3.2 Reference Policies
 
-The key principle: the evaluator never changes resolution results — it only attaches a trust judgment. An `UNVERIFIED` result still contains all resolved data; the app decides what to do with it.
+Two reference policies are defined for common application types:
 
-### DNS Verification Flow
+`INSTITUTIONAL_DEFAULT` — settlement, custody, regulated trading:
+```
+{ "minimum_tier": "T2", "minimum_resolvers": 1,
+  "minimum_total_weight": 0.7, "collision_handling": "strict" }
+```
 
-DNS verification can operate in two modes:
+`PERMISSIVE_DEFAULT` — block explorers, consumer wallets, informational UIs:
+```
+{ "minimum_tier": "T4", "minimum_resolvers": 1,
+  "minimum_total_weight": 0.1, "collision_handling": "permissive" }
+```
 
-Phase 1 (initial deployment): a quorum of featured resolvers independently verify the DNSSEC chain and TXT record. Each resolver publishes a T3 credential. This avoids requiring SV node changes and can be deployed immediately.
+Applications that adopt only CIP-XXXX (resolution without verification) MAY omit the verification policy; all resolved identities will default to `UNVERIFIED` status.
 
-Phase 2 (target): SV nodes verify the DNSSEC chain directly, and the DSO publishes a T1 `CnsDnsClaim` credential. This provides the highest trust level but requires Splice enhancement.
+### 4. Trust Evaluation Algorithm
 
-The verification steps for both phases:
+Given a composed resolution result `R` from CIP-XXXX and a verification policy `P` from Section 3, the evaluator returns a verdict in `{ VERIFIED, PARTIAL, UNVERIFIED, COLLISION, ERROR }`.
 
-1. Party publishes DNS TXT record: `_canton.<domain> TXT "party=<party_id>"`
-2. Phase 1: featured resolvers verify the DNSSEC chain and publish T3 credentials. Phase 2: SV nodes verify and the DSO publishes a T1 credential.
-3. DNS resolver plugin indexes the credential and serves it for resolution queries
-4. Trust evaluator classifies accordingly (T3 in Phase 1, T1 in Phase 2) → VERIFIED per app policy
+The algorithm is:
 
-Re-verification runs periodically (default: 7 days). If the TXT record is removed or changes, the credential is archived.
+1. If `R.status == COLLISION` and `P.collision_handling == "strict"`, return `COLLISION` with the candidates from `R`.
+2. Otherwise, for the selected candidate in `R`, enumerate the credentials whose `cprp/valid-until` has not elapsed (with grace `P.expiry_grace_period`).
+3. Compute cumulative weight by summing the weight of each credential per its `cprp/trust-anchor`.
+4. If cumulative weight ≥ `P.minimum_total_weight`, at least one credential meets `P.minimum_tier`, the count of distinct featured-resolver issuers ≥ `P.minimum_resolvers`, and `P.require_methods` (if any) are all present, return `VERIFIED`.
+5. If at least one credential exists but the thresholds are not met, return `PARTIAL`.
+6. If no credentials exist, return `UNVERIFIED`.
+7. If any required input is malformed or unreachable, return `ERROR` with diagnostic detail.
 
-### vLEI Verification Flow
+The evaluator MUST NOT alter resolution results from CIP-XXXX; it MAY only attach a trust verdict.
 
-For Legal Entity Identifier verification:
+### 5. Featured Resolver Registry
 
-1. Party presents a vLEI credential referencing its LEI
-2. vLEI resolver plugin calls the GLEIF API (`api.gleif.org`) to verify:
-   - The LEI is active and not lapsed
-   - The legal name matches the party's `cns-2.0/name` claim
-   - The Qualified vLEI Issuer (QVI) is in GLEIF's trusted issuer list
-3. If valid, the resolver publishes a T2 credential on-ledger
-4. Trust evaluator classifies as T2 (regulated provider) → VERIFIED
+#### 5.1 Featured Status
 
-Supports both Legal Entity vLEI (LE) and Official Organizational Role vLEI (OOR).
+A resolver attains T3 issuer status by being granted "featured" status through an on-ledger SV governance vote. Featured status:
 
-### Encrypted Fields (deferred to follow-up CIP)
+- Is granted for a defined set of `cprp/featured-registrars` (the registrars the resolver is approved to serve, e.g. specific domain scopes or LEI ranges).
+- Is bound to specific `cprp/featured-methods` (the verification methods the resolver is approved to execute, e.g. `dnssec-txt`, `ens-txt`, `gleif-api`).
+- Renews annually; the renewal vote may modify the registrar or method set.
+- Is revocable by SV vote at any time, taking effect within the bounds of Section 7.
 
-The initial CPRP deployment focuses on the core value: names, trust tiers, and DNS/vLEI verification. Encrypted fields for recipient-specific confidential metadata (settlement instructions, private endpoints, compliance data) are specified in the companion CPRP-spec.md but are deferred to a follow-up CIP to keep scope tight. The cryptographic design (ML-KEM-768 + AES-256-GCM + HKDF-SHA256) is documented for future implementation when the core protocol is proven.
+The SV governance procedure for granting, renewing, and revoking featured status is defined in the Splice on-ledger governance framework and is referenced, not duplicated, here.
 
-### Cross-Chain Identity
+#### 5.2 ResolverFeaturedStatus Credential
 
-Parties can link Canton identity to external chains via self-attested claims:
+Featured-resolver status is encoded as a standard CN Credential — not as a custom Daml template — issued by the DSO party:
 
-| Claim | Content | Verification Path |
-|-------|---------|------------------|
-| `cprp/chain-id:ethereum` | Ethereum address | Signature by the Ethereum private key → T3 |
-| `cprp/chain-id:ens` | ENS name | ENS TXT record pointing to Canton Party ID → T3 |
-| `cprp/chain-id:swift` | SWIFT BIC code | Self-attested (no automated verification) → T4 |
+```
+publisher : <DSO-party>
+subject   : <resolver-operator-party>
+holder    : <resolver-operator-party>
+claims    : {
+  "cprp/featured-resolver"  : "true",
+  "cprp/featured-since"     : "<ISO-8601-timestamp>",
+  "cprp/featured-cip"       : "<CIP-number-that-approved>",
+  "cprp/featured-registrars": "<comma-separated-registrar-list>",
+  "cprp/featured-methods"   : "<comma-separated-method-list>",
+  "cprp/featured-renewal"   : "<ISO-8601-timestamp>",
+  "cprp/trust-anchor"       : "T1"
+}
+```
 
-Cross-chain resolvers can verify the first two automatically. SWIFT remains T4 (self-attested) until a SWIFT verification oracle is available.
+The credential itself is published at T1 (it is the product of SV consensus). Revocation is performed by the DSO archiving the credential.
 
-### Featured Resolver Registry
+#### 5.3 Issuer Tier Inference
 
-Featured resolvers (T3) are registered on-ledger via SV governance vote:
+The trust evaluator infers the tier of an incoming credential by:
 
-- Registration: Any resolver operator submits a CIP requesting featured status. SVs vote.
-- On-ledger: Approved resolvers receive a featured status credential (publisher = DSO, subject = resolver operator) with claims documenting the approval.
-- Renewal: Annual SV confirmation vote. If not renewed, the credential is archived and the resolver loses featured status.
-- Revocation: SVs can revoke featured status at any time by archiving the credential.
+1. Reading the credential's declared `cprp/trust-anchor`.
+2. Looking up the publishing party's `ResolverFeaturedStatus` credential (if any).
+3. Cross-checking that the declared tier is consistent with the publisher's featured status: a T2 or T3 credential MUST be published by a party holding a current `ResolverFeaturedStatus`, otherwise the credential is treated as T4.
 
-The Tech & Ops Committee can also designate a resolver as featured through their administrative authority.
+### 6. Revocation Semantics
 
-### Revocation Semantics
+| Event | Maximum Propagation Time |
+|-------|-------------------------|
+| Credential past `cprp/valid-until` | Immediate (client-side, on read) |
+| Issuer-initiated credential revocation (archival) | ≤60 seconds via Scan changelog |
+| `ResolverFeaturedStatus` revocation by DSO | ≤60 seconds via Scan changelog |
+| DNS record removal (Phase-1 DNS credentials) | ≤7 days (per CIP-ZZZZ re-verification cadence) |
+| vLEI status change at GLEIF | ≤24 hours (per CIP-ZZZZ re-verification cadence) |
 
-| Revocation Type | Mechanism | Propagation Time |
-|----------------|-----------|-----------------|
-| Credential expiry | `validUntil` field on the CN Credential | Immediate (client-side check) |
-| Issuer revocation | Issuer archives the credential via Daml choice | ≤ 60 seconds (changelog propagation) |
-| Featured status revocation | SV archives `ResolverFeaturedStatus` | ≤ 60 seconds |
-| DNS record removal | Re-verification detects missing TXT record | ≤ re-verification period (default 7 days) |
+Trust evaluators MUST honor these bounds. Caching is permitted but MUST observe the credential's `cprp/valid-until` and the changelog subscription for revocations.
 
-All resolvers must implement the `changelog` method (CIP-XXXX) to enable timely propagation of revocations to caching clients.
+### 7. CollisionArbitration (deferred)
 
+Governance-based arbitration of disputed name-to-party mappings across featured resolvers is deferred to the future governance CIP (registrar governance and dispute resolution). This CIP specifies the trust tiers and the evaluator that surface a dispute (returning `COLLISION` under strict policy); the credential encoding for binding arbitration decisions and the escalation process will be specified by that CIP.
 
-## On-Ledger Representation
+### 8. Encrypted Fields (deferred)
 
-Verification-layer data is encoded as standard CN Credentials — no custom Daml templates are required.
+Confidential metadata exchange between Canton parties (e.g. settlement instructions, private endpoints) requires encryption that remains secure for the multi-decade time horizons of institutional assets. The cryptographic design — ML-KEM-768 for key encapsulation, AES-256-GCM for content encryption, HKDF-SHA256 for key derivation — is documented but its on-ledger encoding and credential format are deferred to a follow-up CIP. The core trust framework specified in this CIP ships without encrypted fields.
 
-### ResolverFeaturedStatus (as credential)
+### 9. Architectural Alignment
 
-Featured resolver status is a credential where publisher = DSO party, subject = resolver operator party. Claims include `cprp/featured-resolver: true`, `cprp/featured-since`, `cprp/featured-cip` (the CIP number that approved featured status), `cprp/featured-registrars`, and `cprp/featured-renewal` (renewal deadline). Revocation is modeled as credential archival by the DSO. Annual renewal publishes a new credential with updated deadline.
+- This CIP defines the trust tier framework that CIP-ZZZZ (Imported Names) declares into — every imported credential cites a tier defined here.
+- This CIP defines the verification policy schema and evaluator that operate over composed results from CIP-XXXX (Party Name Resolution). The composition engine of CIP-XXXX never alters trust verdicts; the evaluator of this CIP never alters resolution results.
+- The featured-resolver registry specified here is the T3 issuer mechanism; it is not the arbitration governance for resolver disputes, which is deferred.
+- All on-ledger data is encoded as standard CN Credentials. There are no custom Daml templates defined by this CIP.
 
-### CollisionArbitration (deferred)
+### 10. Backward Compatibility
 
-Governance-based arbitration of disputed name mappings across featured resolvers is deferred to the future governance CIP (registrar governance and dispute resolution). This CIP defines the trust tiers and collision detection that surface a dispute, but not the on-ledger arbitration decision. The credential encoding for binding arbitration decisions will be specified by that CIP.
-
+This CIP is additive. The CN Credentials interface is used as-is; new claim keys (`cprp/trust-anchor`, `cprp/featured-resolver`, `cprp/featured-registrars`, etc.) are additive. Trust tier classification is a CPRP-internal concept that applications opt into via their verification policy. Existing out-of-band KYC and bilateral verification workflows continue to work; this CIP provides a standardized in-network alternative, not a replacement.
 
 ## Rationale
 
-Why four tiers: Maps to Canton's existing governance layers — SV consensus (T1), external regulation (T2), SV-approved participants (T3), and permissionless (T4). Adding more tiers would increase complexity without adding governance clarity.
+### Why four tiers
 
-Why app-driven verification: Centralizing trust policy would require the Canton Foundation to define a global verification standard — a governance burden the WG explicitly wants to avoid. Different applications legitimately have different risk tolerances.
+The tiers map cleanly to Canton's existing governance layers: SV consensus (T1), external regulation (T2), SV-approved participants (T3), and permissionless (T4). Fewer tiers would conflate distinct authority sources; more tiers would add complexity without adding governance clarity. The chosen weight ranges allow finer differentiation within a tier (e.g. a particularly trusted T3 resolver at 0.6 vs a marginal one at 0.4) without inventing new tiers.
 
-Why post-quantum encryption: Canton's institutional users (DTCC, Goldman Sachs, HSBC) hold assets with multi-decade time horizons. ML-KEM-768 provides NIST-standardized post-quantum security for encrypted metadata that may remain sensitive for decades.
+### Why apps decide
 
-Why separate from resolution: Resolution and verification are independently useful and independently evolvable. An application can adopt resolution (CIP-XXXX) on day one and add verification later when ready. A compliance tool can verify a Party ID through credential checks without going through name resolution at all. Coupling them would force unnecessary dependencies and delay the simpler layer.
+Different applications legitimately have different risk tolerances. A consumer wallet that rejected anything below T2 would be unusable; a settlement system that accepted T4 would be reckless. Centralizing trust policy in the foundation would either pick one bad answer for everyone or require constant exception management. Pushing the decision to applications keeps the framework neutral and the operational complexity local.
 
-Why credential-native: Using the existing CN Credentials interface means CPRP verification data is stored, indexed, and queried exactly like other Canton credentials — no new storage layer, no new indexing infrastructure.
+### Why declare tier on the credential
 
+Inferring a credential's tier solely from the publisher's identity is fragile: a publisher's featured status can change, and trust evaluators would need to consult multiple ledger states for every credential. Declaring `cprp/trust-anchor` on the credential makes evaluation local and fast, with the cross-check against `ResolverFeaturedStatus` (Section 5.3) preventing publisher upgrade attacks.
 
-## Backwards Compatibility
+### Why the featured-resolver vote is annual
 
-- CN Credentials: Uses the standard Daml Credential interface unchanged. New claim keys (`cprp/`) are additive.
-- Trust model: Does not modify any existing Canton trust mechanism. The tier classification is a CPRP-internal concept that apps opt into.
-- Scan: Verification badges and profile cards are additive UI elements. Existing Scan functionality is unchanged.
-- Existing verification workflows: Out-of-band KYC and bilateral verification continue to work. CPRP provides a standardized alternative, not a replacement.
+SV consensus is expensive and slow; daily renewals would burden governance for no benefit. A featured resolver's verification quality is a long-running operational property; annual review provides accountability without operational drag. Revocation between renewals remains available for cause.
 
+### Why separate from resolution
 
-## Security Considerations
+Resolution (returning a Party ID) and verification (deciding whether to trust it) are independently useful. An explorer resolves without verifying. A compliance tool may receive a Party ID directly and only need to verify the trust path. Coupling them in one CIP would force unnecessary dependencies in both consumers.
 
-| Threat | Mitigation |
-|--------|-----------|
-| Credential replay (using archived/expired credentials) | On-ledger state verification on every trust evaluation; `validUntil` client-side check |
-| Issuer impersonation (fake T1/T2 credentials) | T1 requires DSO as publisher; T2 requires GLEIF API confirmation; publisher Party ID verified on-ledger |
-| Featured resolver compromise | SV revocation via Daml choice; annual renewal prevents indefinite T3 status |
-| Encrypted field key compromise | Per-recipient keys; compromising one recipient's key does not expose other recipients' data |
-| Harvest-now-decrypt-later (quantum threat) | ML-KEM-768 (NIST FIPS 203) provides IND-CCA2 security against quantum adversaries |
-| vLEI lapse not detected | Periodic re-verification (configurable, default 30 days); GLEIF API checked on first resolution |
-| DNS hijacking / DNSSEC bypass | SV consensus verification (multiple SVs must agree); re-verification cycle |
-| Collision exploitation (attacker registers same name on permissionless resolver) | T4 credentials rejected by institutional verification policies; collision detection in CIP-XXXX |
+## Companion CIPs
 
-
-## Implementation
-
-A reference implementation is proposed separately as a Canton Protocol Development Fund grant (PR to `canton-dev-fund`). Funding scope, milestones, and budget are defined in that grant proposal and are intentionally kept out of this CIP, so that standards review and funding review remain independent.
-
-
-## Companion Documents
-
-- CIP-XXXX: Party Name Resolution — FQPN format, resolver interface, resolution strategy, composition engine, address books, name delegation, display model
-- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, and migration.
+- CIP-XXXX (Party Name Resolution) — defines the FQPN format, resolver interface, composition engine, and display model. The trust evaluator specified here operates over composed results from CIP-XXXX.
+- CIP-ZZZZ (Imported Names) — defines per-source verification procedures (DNS, vLEI, ENS, cross-chain). Each procedure declares the trust tier its credentials carry.
+- `.canton` CIP (Axymos, PR #209) — defines Canton-native naming and its registrars. Native names compose alongside imported names; the framework specified here applies uniformly.
