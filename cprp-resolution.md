@@ -1,313 +1,388 @@
 Number: CIP-XXXX
 
-Title: Canton Party Resolution Protocol (CPRP) - Party Identity Resolution
-
-Author(s): Paolo Domenighetti (Freename AG)
+Title: Canton Party Name Resolution — FQPN, Resolver Interface, and Composition
 
 Status: Draft
 
-Created: 2026-05-28
+Author: Paolo Domenighetti (Freename)
 
-Post-History: Canton Identity and Metadata Working Group (Jan–May 2026)
+Created: 2026-05-31
 
-Requires: CN Credentials Standard (CIP TBD), CNS 2.0 (CIP TBD)
+## Abstract
 
-Related: CIP-YYYY (Party Identity Verification)
+This CIP defines the resolution layer for the Canton Network: how applications resolve human-readable names to Canton Party IDs and how they retrieve associated metadata. It specifies the Fully Qualified Party Name (FQPN) addressing format, the generic Resolver Interface that any identity provider implements, the Resolution Strategy that applications use to configure resolver order and weights, the Composition Engine that merges results from multiple resolvers, the collision detection and surfacing semantics, the on-ledger encoding of name registrations and delegations as standard CN Credentials, the three-layer display model that renders resolved names with source icons, the off-ledger Resolution Service API, and the integration of locally scoped address books.
 
-
-## Summary
-
-This CIP defines the resolution layer of the Canton Party Resolution Protocol (CPRP): the standardized mechanism by which Canton applications resolve human-readable names to Canton Party IDs, discover off-ledger API endpoints, and retrieve self-published party profile information.
-
-The protocol introduces:
-
-- A Fully Qualified Party Name (FQPN) addressing format with network discrimination
-- A built-in `party` resolver ensuring every Canton party always has at least one FQPN
-- A Resolver Interface that any identity provider can implement (DNS, vLEI, CN Credentials, ENS, application directories)
-- An app-configurable Resolution Strategy where each application decides which resolvers to query and in what order
-- A Composition Engine that merges results from multiple resolvers, detects collisions, and applies weighting
-- Address book integration for institutional counterparty directories
-- Name delegation for organizational hierarchies (e.g., `treasury.acme.com`)
-- A three-layer display model for uniform party name rendering across Scan and all applications
-
-This CIP focuses on the naming and resolution mechanics. Trust evaluation, issuer classification, verification policies, and encrypted metadata are defined in the companion CIP-YYYY (Party Identity Verification).
-
-A shared technical specification accompanies both CIPs: [CPRP-spec.md](./CPRP-spec.md).
-
+This CIP does not define the trust tier framework or verification semantics (specified in CIP-YYYY, Party Identity Verification). It does not define how external names (DNS, LEI/vLEI, ENS) are imported into Canton (specified in CIP-ZZZZ, Imported Names). It does not define Canton-native naming or the `.canton` namespace (specified in the `.canton` CIP led by Axymos, PR #209); it only specifies how `.canton` names flow through the resolution layer as one source among many.
 
 ## Motivation
 
-### The Naming Problem
+Canton participants are identified by cryptographic Party IDs — opaque alphanumeric strings of the form `<prefix>::<68-character-namespace-hash>` where the namespace is a hash of the party administrator's public key. These strings are unusable in any human workflow. The CNS 1.0 names that exist today (`goldmansachs.unverified.cns`) are first-come-first-serve with no ownership check, so they convey no signal about which counterparty they actually identify.
 
-The fundamental form of identity on Canton is a Party ID: a prefix (up to 185 characters) and a namespace (a 68-character hash of a public key). Party IDs are cryptographic identifiers designed for privacy and security, but they are unusable for human workflows. The namespace is a random hex sequence that cannot be memorized. The prefix is freely chosen and trivially spoofable. CNS 1.0 names (`name.unverified.cns`) are first-come-first-serve with no ownership validation beyond payment.
+The Identity and Metadata Working Group has identified three concrete gaps:
 
-### Multiple Identity Sources
+- P1: Trustworthy human-readable names. Applications need to display and accept names that map to specific Canton parties.
+- P2: Off-ledger API endpoint discovery. Applications need to find administrative endpoints (for example, the token-admin API for a CIP-56 instrument) keyed on a party identifier.
+- P3: Self-published profile information. Parties need to publish profile data that displays uniformly across applications.
 
-The Working Group has identified that Canton will have multiple identity sources — no single naming authority will serve all participants. DNS-verified names, vLEI/LEI credentials, CN Credentials, application directories, and third-party providers will coexist. Applications need a standard way to query across these sources and compose the results.
+This CIP addresses the resolution machinery that underlies all three: a uniform addressing model, a pluggable resolver interface, an explicit composition algorithm, a deterministic collision behavior, and a standard display model. The trust judgment that turns a resolved name into a verified one is left to CIP-YYYY; the import of external names into Canton credentials is left to CIP-ZZZZ.
 
-### The Missing Layer
+## Specification
 
-Digital Asset is building credential formats and a registry (what the data looks like). PixelPlex is exploring credential storage (where the data lives). This CIP addresses how an application navigates from a human-readable name, across multiple identity sources, to a Canton Party ID — with configurable resolution strategies per application.
+### 1. Terminology
 
-### Alignment with Working Group Principles
+- Party ID. A Canton ledger identity consisting of a prefix and a namespace. The namespace is a 68-character hexadecimal hash of the party administrator's public key. The prefix is a freely chosen human-meaningful component. Party IDs are formatted as `<prefix>::<namespace>` and may contain further `::` separators introduced by administrator delegation.
+- Resolver. A software component that provides a mapping between names in some external or internal naming system and Canton Party IDs. Examples: a DNS resolver, a vLEI resolver, a `.canton` resolver, a local address book.
+- Registrar. The naming authority or registrant scope within a resolver. For DNS, the registrar is the registered domain (e.g. `acme.com`). For vLEI, the registrar is the LEI. For Canton-native `cns` naming, the registrar is a Super Validator–approved entity that allocates names within the `.canton` (or related) suffix set.
+- Name. The leaf identifier within a registrar's scope (e.g. `treasury` within `acme.com`).
+- FQPN. A Fully Qualified Party Name; see Section 2.
+- Composed Result. The output of running a Resolution Strategy against a query; see Section 4.
 
-This CIP implements the resolution-specific design principles established in the WG:
+### 2. The Fully Qualified Party Name (FQPN)
 
-- Follows the `<network>:<resolver>:<registrar>:<name>` addressing pattern proposed by Simon Meier
-- Implements the "apps decide resolution strategy" principle — no foundation-mandated resolution policy
-- Avoids bloating the ACS of the DSO party (resolution queries are off-ledger)
-- Avoids bloating the Scan API surface (additive changelog integration only)
-- Supports integrating existing name providers (DNS, ENS, vLEI) as resolvers
-- Supports local address books as a resolver type
+#### 2.1 Format
 
+A Fully Qualified Party Name is structured as four `;`-separated components:
 
-## Specification Overview
-
-The full specification is in the shared companion document [CPRP-spec.md](./CPRP-spec.md). This section summarizes the resolution-layer design elements.
-
-### Fully Qualified Party Name (FQPN)
-
-Names are structured as `<network>:<resolver>:<registrar>:<name>`, following the FQPN syntax proposed by Simon Meier in the Working Group:
+```
+<network>;<resolver>;<registrar>;<name>
+```
 
 | Component | Purpose | Example Values |
-|-----------|---------|---------------|
+|-----------|---------|----------------|
 | `network` | Prevents cross-environment confusion | `mainnet`, `testnet`, `devnet` |
-| `resolver` | Identity source that backs the name | `dns`, `vlei`, `cns`, `freename`, `self` |
-| `registrar` | Naming authority or registrant scope within the resolver (the component earlier drafts called the namespace) | `goldmansachs.com`, `acme-bank.canton`, `lloyds` |
+| `resolver` | Identity source that backs the name | `dns`, `vlei`, `ens`, `cns`, `freename`, `self`, `party` |
+| `registrar` | Naming authority or registrant scope within the resolver | `goldmansachs.com`, `acme-bank.canton`, `lloyds`, `axymos` |
 | `name` | Specific name within the registrar | `default`, `treasury`, `trading-desk-3` |
 
 Examples:
-- `mainnet:dns:goldmansachs.com:default`
-- `mainnet:vlei:784F5XWPLTWKTBV3E584:default`
-- `testnet:freename:acme-bank.canton:treasury`
-- `mainnet:self:acme-bank:default` (self-attested: the registrar is the party's own freely chosen Party ID prefix, hence T4 trust)
-- `mainnet:party:<party-prefix>:default` (built-in, every party gets one automatically, derived from its Party ID)
 
-The `self` and `party` resolvers are built-in and available in all networks; they are not registered on a per-network basis. The `network` segment of the FQPN performs the disambiguation, so `mainnet:party:...` and `devnet:party:...` are distinct names backed by the same built-in resolver. The `self` resolver returns claims a party publishes about itself with no external verification (T4, lowest trust); the `party` resolver guarantees that every Canton party always has at least one FQPN derived from its Party ID, even before any name is registered.
+- `mainnet;dns;goldmansachs.com;default`
+- `mainnet;vlei;784F5XWPLTWKTBV3E584;default`
+- `mainnet;cns;axymos;blackrock.canton`
+- `testnet;freename;acme-bank.canton;treasury`
+- `mainnet;self;acme-bank;default`
+- `mainnet;party;<party-prefix>;default`
 
-Because a Canton Party ID itself contains `::` separators, full Party IDs are referenced in FQPNs by their prefix (the human-chosen component) rather than embedded verbatim, so that the `:` field delimiter remains unambiguous.
+#### 2.2 Why `;` and not `:`
 
-Human-readable names such as `alice.canton` are provided through the `.canton` namespace, described in its own section below. Users type `alice.canton` directly — the full FQPN is infrastructure-level and invisible, like IP addresses behind DNS.
+A semicolon is used as the field separator because `:` appears unescaped in many identifiers that legitimately occupy an FQPN slot, most notably the `::` separators inside Canton Party IDs (e.g. `acme-bank::1220abcd...`). Alternatives considered and rejected:
 
-Network discrimination is a security requirement: TestNet names must not be confusable with MainNet names.
+- `:` (colon) — collides with Party ID's `::` and with URL/email syntax.
+- `|` (pipe) — visually ambiguous with lowercase L in many fonts.
+- `,` (comma) — conventionally used for lists.
 
-### Resolver Interface
+The semicolon is unambiguous in DNS names, email addresses, URLs, and Party IDs, and visually distinct from `:`. Implementations MUST NOT accept `:` as a substitute.
 
-Any identity provider can become a CPRP resolver by implementing the following logical interface (these are method signatures, not HTTP verbs — the HTTP mapping is defined in the companion specification §12):
+#### 2.3 Network Discrimination
 
-| Method | Input | Output | Purpose |
-|--------|-------|--------|---------|
+The `network` component is mandatory. TestNet names MUST NOT be confusable with MainNet names. Display of FQPNs SHOULD include the network when an application supports multiple networks.
+
+#### 2.4 Built-in Resolvers
+
+Two resolver values are built-in to this CIP and available on every network. They are not registered on a per-network basis; the `network` segment of the FQPN performs the disambiguation, so `mainnet;party;...` and `devnet;party;...` are distinct names backed by the same built-in resolver.
+
+- `party` — Returns an FQPN derived directly from a Canton party's Party ID. The registrar slot is the human-chosen Party-ID prefix; the name slot is conventionally `default`. This resolver guarantees that every Canton party always has at least one FQPN, even before any name registration. Trust tier T4 (the prefix is freely chosen and trivially spoofable).
+- `self` — Returns claims a party publishes about itself with no external verification. Trust tier T4. Used for self-attested profile information.
+
+Because a Canton Party ID itself contains `::` separators, full Party IDs are referenced in FQPNs by their prefix (the human-chosen component) rather than embedded verbatim, so that the `;` field delimiter remains structurally separate from the Party ID's internal syntax.
+
+#### 2.5 The `cns` Resolver and Its Registrars
+
+The `cns` resolver value represents the Canton-native naming system. Unlike single-authority resolvers (e.g. `dns` which is governed by the global DNS), `cns` admits multiple registrars within its resolver space. Each `cns` registrar:
+
+- Is approved through Super Validator governance (or an alternative governance structure defined by the `.canton` CIP) and identified by a unique ASCII registrar name (e.g. `axymos`).
+- Takes responsibility for allocating names within its scope and may issue names ending in `.canton` (and any further suffixes the `.canton` CIP authorizes).
+- MUST NOT issue names ending in any DNS top-level domain (`.com`, `.net`, `.org`, etc.). This rule is enforced at the credentials standard level by the `.canton` CIP.
+- Has an associated icon, whitelisted through the same governance process that approves the registrar, to be displayed alongside its names (see Section 9).
+
+The allocation, uniqueness, and governance of `cns` registrars and of the `.canton` suffix set are specified in the `.canton` CIP (Axymos, PR #209), not in this CIP. This CIP only specifies how `cns`-resolved names are addressed in FQPNs, composed with results from other resolvers, and displayed.
+
+### 3. The Resolver Interface
+
+Every resolver — built-in or third-party — implements the following logical interface. The interface is defined logically; an HTTPS mapping is given in Section 7.
+
+| Method | Inputs | Output | Purpose |
+|--------|--------|--------|---------|
 | `resolve` | registrar, name | `ResolutionResult` | Forward lookup: name → Party ID + metadata |
-| `reverseResolve` | partyId | `ReverseResolutionResult` | Reverse lookup: Party ID → registered names |
-| `resolveMulti` | queries[] | `ResolutionResult[]` | Batch resolution (latency optimization) |
-| `changelog` | since timestamp | `ChangelogEntry[]` | Credential changes since a given time |
+| `reverseResolve` | party_id | `ResolutionResult[]` | Reverse lookup: Party ID → names known to this resolver |
+| `resolveMulti` | `(registrar, name)[]` | `ResolutionResult[]` | Batched forward lookup |
+| `changelog` | since-cursor | event stream | Subscribe to changes (additions, archivals, revocations) |
 
-Each resolver publishes backing credentials via the CN Credentials Daml interface and reports its type:
+#### 3.1 ResolutionResult Schema
 
-| Resolver Type | Registration | Trust Tier | Example |
-|--------------|-------------|-----------|---------|
-| Featured | SV governance vote (on-ledger credential published by DSO) | Elevated | Freename, 7Trust |
-| Permissionless | No registration required; implements the interface | Base | Any third-party identity service |
-| Address Book | Local to the application; no network registration | App-defined | Citadel internal directory |
-
-Note: the trust weight and tier classification of resolvers is defined in CIP-YYYY (Party Identity Verification). This CIP defines the resolver types and their registration mechanism; CIP-YYYY defines what trust level each type carries. Applications that adopt only CIP-XXXX (without CIP-YYYY) treat all resolved identities as unverified.
-
-### Claim Key Namespace Conventions
-
-CPRP claim keys follow the `<authority>/<key>` format. Three authority prefixes are defined:
-
-- `cprp/*` — protocol-level claims defined in this CIP and CIP-YYYY (e.g., `cprp/resolver`, `cprp/endpoint:api`)
-- `cip-<nr>/*` — claims defined by other CIPs, notably the PixelPlex Party Profile Credentials CIP (e.g., profile display claims; `cns-2.0/*` is used as a working prefix until the CIP number is assigned)
-- `<domain>/*` — third-party resolver claims scoped by the resolver's DNS domain (e.g., `freename.com/verified-since`, `7trust.c7.digital/reputation-score`), following K8s-style annotation conventions
-
-### Resolution Strategy
-
-Each Canton application configures a Resolution Strategy — a JSON document that governs resolution behavior. The strategy spans both CIPs: resolution parameters (`resolvers`, `mode`, `collision_policy`, `cache_ttl_seconds`, `address_books`, `display_rule`) are defined here; verification parameters (`verification_policy`) are defined in CIP-YYYY. Applications that adopt only CIP-XXXX may omit the verification policy; all resolved identities will default to `UNVERIFIED` status.
-
-```json
+```
 {
-  "mode": "parallel",
-  "resolvers": [
-    { "id": "dns",        "weight": 1.0 },
-    { "id": "vlei",       "weight": 0.9 },
-    { "id": "freename",   "weight": 0.8 },
-    { "id": "self",       "weight": 0.3 }
-  ],
-  "collision_policy": "strict",
-  "cache_ttl_seconds": 300,
-  "address_books": [],
-  "display_rule": "highest_trust_tier"
+  "fqpn"           : "<network>;<resolver>;<registrar>;<name>",
+  "party_id"       : "<canton-party-id>",
+  "display_name"   : "<human-readable string>",
+  "ascii_form"     : "<resolver;registrar;name>",
+  "metadata"       : { /* claim keys and values, see Section 5 */ },
+  "claim_sources"  : { /* per-claim provenance */ },
+  "valid_until"    : "<ISO-8601-timestamp>",
+  "status"         : "OK" | "EXPIRED" | "COLLISION" | "NOT_FOUND"
 }
 ```
 
-Three resolution modes:
+#### 3.2 Error Codes
 
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| Priority | Resolvers queried sequentially by weight; first match wins | Low-latency applications |
-| Parallel | All resolvers queried simultaneously; results composed by weight | Maximum verification depth |
-| Quorum | Resolution succeeds only when N resolvers agree on the same Party ID | High-security applications |
+| Code | Meaning |
+|------|---------|
+| 1000 | Name not found |
+| 1001 | Registrar not supported by this resolver |
+| 1002 | Resolver temporarily unavailable |
+| 1003 | Malformed FQPN |
+| 1004 | Network mismatch |
 
-Two reference strategies are defined in the spec:
-- `INSTITUTIONAL_DEFAULT` — parallel mode, strict collision policy, requires DNS or vLEI
-- `PERMISSIVE_DEFAULT` — parallel mode, permissive collision policy, address-book-first
+### 4. Resolution Strategy and Composition
 
-`INSTITUTIONAL_DEFAULT` does not query the address book first because institutional flows require counterparty identity to be backed by an externally verifiable source (DNS or vLEI) rather than by a local, operator-subjective address book entry. The address book may still participate as a lower-weight fallback within the same strategy — this is a matter of resolver position and weight, not exclusion. `PERMISSIVE_DEFAULT` reverses the emphasis for consumer and explorer contexts, where a recognized local label is preferable to showing no name at all.
+An application's Resolution Strategy is a JSON document declaring which resolvers to query, in what mode, with what weights, and how to combine results.
 
-### Composition Engine
+#### 4.1 Strategy Schema
 
-When multiple resolvers return results for the same query, the Composition Engine:
+```
+{
+  "network"           : "mainnet",
+  "resolvers"         : [
+    { "id": "dns",      "weight": 0.8, "trust_tier": "T3" },
+    { "id": "vlei",     "weight": 0.9, "trust_tier": "T2" },
+    { "id": "cns",      "weight": 0.5, "trust_tier": "T3" },
+    { "id": "self",     "weight": 0.1, "trust_tier": "T4" }
+  ],
+  "address_books"     : [ /* see Section 6 */ ],
+  "resolution_mode"   : "priority" | "parallel" | "quorum",
+  "quorum_n"          : 2,
+  "display_name_rule" : {
+    "source"   : "highest_weight" | "specific_resolver" | "address_book_first",
+    "claim_key": "cns-2.0/name"
+  },
+  "cache_policy"      : { "ttl_seconds": 300 },
+  "verification_policy": { /* see CIP-YYYY */ }
+}
+```
 
-1. Groups results by `party_id`
-2. For same-resolver duplicates: selects by Ledger Effective Time (last-write-wins, per CNS 2.0)
-3. For cross-resolver duplicates: merges metadata, selects display name by weight
-4. For conflicting `party_id` values: triggers collision handling per the strategy's `collision_policy`
-5. Merges credential arrays, endpoint maps, and profile claims across all sources
-6. Records per-claim provenance (`claim_sources`): for each metadata key, tracks which resolver and issuer contributed the value — enabling institutional audit trails
+Three modes:
 
-### Profile Rendering Guidelines
+- `priority` — query resolvers in declared order; first hit wins.
+- `parallel` — query all resolvers simultaneously; merge results via composition.
+- `quorum` — N-of-M agreement on Party ID before returning.
 
-Profile claims (`cns-2.0/name`, `cns-2.0/avatar`, `cns-2.0/email`, `cns-2.0/website`) are informational only and MUST NOT be interpreted as verified identity attributes. Verification status is determined exclusively by CIP-YYYY's trust evaluation, not by profile content. Display names SHOULD be ≤64 Unicode characters. Avatars SHOULD be `https://` URLs; applications MAY additionally support `ipfs://` URIs.
+#### 4.2 Composition Engine
 
-Social contact claims use the extensible `cprp/social:<platform>` convention (e.g., `cprp/social:telegram`, `cprp/social:x`, `cprp/social:github`, `cprp/social:discord`). These are T4 (self-attested) by default and are compatible with the PixelPlex Party Profile Credentials CIP.
+When more than one resolver returns a result, the Composition Engine merges them deterministically:
 
-### Collision Management
+1. Group results by returned Party ID.
+2. Within a group, resolve same-resolver conflicts by ledger effective time (LET) — later wins.
+3. Across resolvers within a group, merge metadata; for conflicting claim values on the same key, the higher-weighted resolver's value wins.
+4. Record per-claim provenance in `claim_sources` so downstream consumers (auditors, compliance tools) can trace which resolver contributed which value.
+5. If groups disagree on Party ID (i.e. the same name maps to different parties across resolvers), the engine returns status `COLLISION` with all candidates and their respective trust paths.
 
-When the same name maps to different parties across resolvers:
+The Composition Engine never alters the resolver inputs. It does not assign or override trust judgments — trust is computed by the CIP-YYYY evaluator over the composed result.
 
-| Policy | Behavior |
-|--------|----------|
-| Strict | Returns status `COLLISION` with both candidates; app must present disambiguation UI |
-| Permissive | Selects the highest-weight result; attaches collision warning to the response |
+#### 4.3 The `display_name_rule`
 
-Governance-based arbitration of disputes between featured resolvers is deferred to the future governance CIP (registrar governance and dispute resolution). This CIP defines collision detection and surfacing only: on a collision, the strategy returns the candidates with their trust paths and the app decides.
+The strategy's `display_name_rule` decides which name is shown first (the leading glyph plus ASCII string per Section 9). Three sources:
 
-### Address Books
+- `highest_weight` — the display name claim from the highest-weighted resolver in the result wins.
+- `specific_resolver` — a named resolver's claim is preferred.
+- `address_book_first` — a matching address book entry's display name wins over network resolver claims.
 
-Local and organization-scoped address books integrate as a special resolver type:
+This rule answers the WG's open question of who picks the displayed name: the consuming application, via its strategy, per query.
 
-- In-process: SDK loads entries from a local database or config file
-- Org-scoped: Corporate LDAP/directory service exposed via the resolver interface
-- Validator-configured: Pre-loaded at the validator level for all apps on that node
+#### 4.4 Reference Strategies
 
-Address books provide display names and profile metadata (contact info, internal notes, custom labels) — but this data is locally scoped with no external trust weight. Address book claims cannot override trust tier or verification status (those come from CIP-YYYY). Typical use: an institution shows "GS Prime" instead of "Goldman Sachs" for internal convenience, while network resolvers still control verification status.
+Two reference strategies are defined for common application contexts:
 
-### Name Delegation
+- `INSTITUTIONAL_DEFAULT` — parallel mode, strict collision policy, requires DNS or vLEI, no address-book-first. Externally verifiable sources lead; a local address book entry MAY be present as a lower-weight fallback but never overrides DNS or vLEI.
+- `PERMISSIVE_DEFAULT` — parallel mode, permissive collision policy, address-book-first. Tailored for consumer wallets and explorers where a recognized local label is preferable to no name at all.
 
-Name owners can authorize sub-parties to register subnames. Delegation is modeled as a CN Credential:
+The reason `INSTITUTIONAL_DEFAULT` does not put the address book first is that institutional flows require counterparty identity to be backed by an externally verifiable source rather than by a per-operator subjective label; the address book may still participate, weighted appropriately.
 
-- Parent publishes a `NameDelegation` Daml contract specifying `delegatee`, `parent_fqpn`, `allowed_subnames`, and `scope` (`name-only` or `name-and-subdelegation`)
-- Counterparties verify the delegation chain: subname → parent name → parent's credential
-- Trust tier inherits from the parent's verified tier
-- DNS TXT delegation records provide an additional off-chain anchor
+### 5. Claim Keys (Resolution-Layer)
 
-### The .canton Namespace
+The following claim keys are defined by this CIP. Imported-name claims (`cprp/source`, `cprp/legal-name`, etc.) are defined in CIP-ZZZZ; trust claims (`cprp/trust-anchor`, `cprp/featured-resolver`, etc.) are defined in CIP-YYYY. Profile claims (`cns-2.0/name`, `cns-2.0/avatar`, `cns-2.0/email`, `cns-2.0/website`) follow the convention defined in the Party Profile Credentials CIP from PixelPlex; profile claims are informational only and MUST NOT be interpreted as verified identity attributes.
 
-`.canton` is a Canton-native naming convention — not a DNS TLD. Allocation, uniqueness, and governance of `.canton` names are defined by the dedicated `.canton` CIP led by Axymos (PR #209), not by this CIP. CPRP treats `.canton` as one resolver source among many: it composes `.canton` results with other sources, attaches trust per CIP-YYYY, and surfaces cross-resolver collisions — without itself allocating `.canton` names. As they flow through CPRP, `.canton` names are:
+| Claim Key | Value | Purpose |
+|-----------|-------|---------|
+| `cprp/fqpn` | An FQPN string | The canonical FQPN this credential certifies |
+| `cprp/network` | `mainnet` / `testnet` / `devnet` | Network discriminator |
+| `cprp/registrar` | Registrar component | The registrar this credential is scoped under |
+| `cprp/endpoint:<service>` | URL | Off-ledger API endpoint, keyed by service (e.g. `cprp/endpoint:token-admin`) |
+| `cprp/social:<platform>` | Handle/URL | Self-attested social contact (T4); platforms include `telegram`, `x`, `github`, `discord` |
+| `cprp/parent-fqpn` | An FQPN string | For delegation credentials; the parent registrant's FQPN |
+| `cprp/delegated-name` | string | The leaf name being delegated |
+| `cprp/delegation-scope` | `name-only` / `name-and-subdelegation` | Whether the delegated subname can further delegate |
 
-- Network-scoped (distinct per MainNet/TestNet/DevNet)
-- Verification-independent (trust comes from credentials, not from the suffix)
-- Composable alongside imported names (DNS, vLEI, etc.) in the resolution result
+The `cprp/endpoint:*` family of keys carries only the URL. Profile metadata such as entity type, capabilities, or jurisdiction is published as separate profile claims rather than bundled into endpoint credentials.
 
-Examples of .canton names as seen by CPRP:
+### 6. Address Books
 
-- `alice.canton` — an individual name issued under the `.canton` CIP, resolved and trust-evaluated by CPRP like any other source
-- `goldmansachs.canton` — an institution's Canton-native name, which may coexist with its DNS-verified name in the composition result
-- `treasury.acme.canton` — a delegated subname under `acme.canton`, verified via the delegation chain (Name Delegation, above)
+An address book is a locally scoped resolver — typically a per-institution or per-application table mapping names to Party IDs and associated metadata. Address books are part of the Resolution Strategy alongside network resolvers.
 
-Users type `alice.canton` directly. The FQPN infrastructure is invisible — resolvers and registrars are handled by the SDK, just as DNS root servers and TLD delegation are invisible to web users.
+Address book claims have no external trust weight; they cannot raise the trust tier of an identity and MUST NOT override the verification status produced by CIP-YYYY's evaluator. Their role is local: an institution may show "GS Prime" instead of "Goldman Sachs" for internal convenience, while network resolvers continue to control the verified identity.
 
-### Three-Layer Display Model
+### 7. Off-Ledger Resolution Service API
 
-Party identity is rendered in three progressive layers:
-
-| Layer | Surface | Content |
-|-------|---------|---------|
-| L1: Inline | Transaction lists, counterparty fields | Display name + verification badge (✓ or ⚠) |
-| L2: Hover | Tooltip/popover on hover or tap | Profile card: name, LEI, jurisdiction, issuer summary |
-| L3: Full | Explorer profile page (Scan or third-party) | Complete profile: all credentials, trust path, endpoints, history, delegation chain |
-
-Fallback chain: display name → CNS 1.0 entry → party ID prefix → truncated party ID.
-
-### Off-Ledger API
-
-The Resolution Service exposes:
+The logical Resolver Interface (Section 3) is exposed as an HTTPS service that any application can deploy alongside its existing Canton infrastructure. The service is stateless: all state is derived from on-ledger credentials and externally cached data.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/v1/resolve` | POST | Single resolution query |
-| `/v1/resolve/batch` | POST | Batch resolution (up to 100 queries) |
-| `/v1/resolve/reverse` | POST | Reverse resolution (Party ID → names) |
-| `/v1/changelog` | GET | Credential change stream |
-| `/v1/resolvers` | GET | List available resolvers and their status |
-| `/v1/health` | GET | Service health check |
+| `/v1/resolve` | POST | Single forward lookup |
+| `/v1/resolve/batch` | POST | Batched forward lookup |
+| `/v1/resolve/reverse` | POST | Reverse lookup |
+| `/v1/changelog` | GET (SSE) | Subscribe to changes |
 
+A gRPC equivalent is offered for low-latency clients.
 
-## On-Ledger Representation
+Operational requirements:
 
-Resolution-layer data is encoded as standard CN Credentials — no custom Daml templates are required.
+- Stateless deployment; horizontal scaling by replication.
+- Recommended baseline footprint: 2 vCPU, 4 GB RAM per replica.
+- No modification to SV nodes or to the Scan service is required.
 
-### PartyNameRegistration (as credential)
+### 8. On-Ledger Representation
 
-A name registration is a credential where publisher = resolver party, subject = registered party, holder = registered party. Claims include `cprp/resolver`, `cprp/registrar`, `cprp/name`, `cprp/network`, and a `cprp/record-version`. Updates are modeled as archiving the old credential and publishing a new one. Revocation is modeled as archival.
+This CIP defines two on-ledger entities, both encoded as standard CN Credentials (not custom Daml templates):
 
-### NameDelegation (as credential)
+#### 8.1 PartyNameRegistration (as credential)
 
-A delegation is a credential where publisher = parent party, subject = child party (delegatee), holder = child party. Claims include `cprp/delegation: true`, `cprp/parent-fqpn`, `cprp/delegated-name`, and `cprp/delegation-scope` (`name-only` or `name-and-subdelegation`). Revocation by the parent archives the credential. Sub-delegation is modeled as the child publishing a new credential for a sub-delegatee if scope permits.
+A name registration is a credential where the publisher is the issuing resolver (e.g. the DSO party for `.canton` names approved by SV vote, or a featured resolver for other names), the subject is the registered Canton party, and the holder is the registered Canton party. Claims include:
 
-Estimated ACS impact: ~900 bytes per party for registration + ~800 bytes per delegation. Whether these credentials belong in the DSO registry or a separate app-layer registry is an implementation decision to be resolved during development.
+- `cprp/fqpn` — the canonical FQPN
+- `cprp/network` — the network
+- `cprp/registrar` — the registrar
+- `cprp/trust-anchor` — declared per CIP-YYYY tier rules
+- `cprp/valid-until` — expiry
 
+A NameDelegation credential (next subsection) is required to authorize subnames under a registered name.
 
-## Backwards Compatibility
+#### 8.2 NameDelegation (as credential)
 
-### CNS 1.0 Coexistence
+A delegation is a credential where the publisher is the parent (the holder of the parent name), the subject is the child party (the subname's intended holder), and the holder is the child party. Claims include `cprp/parent-fqpn`, `cprp/delegated-name`, and `cprp/delegation-scope`.
 
-CPRP is fully backward compatible with CNS 1.0:
+The composition engine verifies delegations recursively: a subname FQPN's authenticity depends on a valid chain from the leaf subname back to a registered parent that is itself rooted in a credible registrar (e.g. a DNS-verified domain). A delegation with `cprp/delegation-scope` of `name-only` cannot itself authorize further subdelegation.
 
-- Existing `.unverified.cns` names continue to work unchanged
-- A `cns-v1` resolver plugin wraps the existing `DsoAnsResolver` as a CPRP-compatible resolver
-- The `cns-v1` plugin returns CNS 1.0 names as self-attested credentials with low weight (0.3)
-- Parties can upgrade to verified names via `cprp-cli upgrade` while retaining CNS 1.0 aliases
-- No migration is forced — adoption is entirely opt-in
+#### 8.3 On-Ledger Footprint
 
-Concrete examples of how existing names map under CPRP:
+Per-party footprint is dominated by credential contracts at ~1–3 KB each; PartyNameRegistration adds ~500 bytes per registered name and NameDelegation ~400 bytes per delegated subname. Total ACS impact for 1,000 parties with an average of 3 credentials and 2 delegations each is approximately 7 MB. Resolution queries are off-ledger and do not contribute to ACS growth.
 
-- `goldmansachs.unverified.cns` — the cns-v1 resolver plugin reads this from Scan and returns it as a CPRP resolution record. CPRP-enabled apps see it alongside any higher-trust results (e.g., DNS-verified). No change needed from the user or from CNS 1.0.
-- `digital-asset.sv.cns` — the cns-v1 plugin exposes this as `cns-v1:sv.cns:digital-asset`. If the SV also registers via DNS verification, they additionally have `dns:digitalasset.com:default` at higher trust. Both names coexist in the composition result — the app's strategy decides which to display.
+### 9. Display Model
 
-### CN Credentials
+Resolved names are rendered consistently across applications using a three-layer model and a common icon-plus-ASCII convention.
 
-Uses the standard Daml Credential interface unchanged. CPRP claim keys use the `cprp/` authority prefix.
+#### 9.1 Icon + ASCII Convention
 
-### Scan Integration
+Every rendered name MUST be preceded by a source icon that identifies its `resolver` component (and, for `cns`, the specific registrar). The icon is a deterministic function of the FQPN's `resolver` (and `registrar` for `cns`) — no separate lookup is required at display time.
 
-Additive only — no breaking changes to existing Scan functionality. The three-layer display model is layered on top of existing Scan UI.
+- For DNS, LEI, vLEI, and ENS: a single standardized icon per resolver. Registrars within these resolvers do not get their own icons.
+- For `cns`: each governance-approved registrar has its own icon, whitelisted through the same Super Validator governance procedure that approves the registrar (per the `.canton` CIP). Even registrars that function only inside Canton receive an icon — every name has an associated source icon.
+- For `self` and `party` built-ins: a neutral icon indicating self-attested or Party-ID-derived origin.
 
-### Existing Applications
+Rendering example: `mainnet;dns;lloyds.com;tmmf` displays as `<dns icon> tmmf.lloyds.com`; `mainnet;cns;axymos;blackrock.canton` displays as `<axymos icon> blackrock.canton`.
 
-CPRP adoption is opt-in. Non-adopting apps continue to use raw Party IDs or CNS 1.0 names exactly as before.
+The icon represents the source of the name. Trust state (verified, partial, unverified) is a separate signal carried by an additional badge (`✓` / `⚠`) computed by the CIP-YYYY evaluator; both icon and badge may be displayed.
 
+#### 9.2 Three Layers
 
-## Security Considerations
+| Layer | Where Used | Content |
+|-------|------------|---------|
+| L1: Inline | Transaction lists, counterparty fields | Source icon + ASCII name + verification badge |
+| L2: Hover | Tooltip / popover on hover or tap | Profile card with name, LEI, jurisdiction, issuer summary |
+| L3: Full | Explorer profile page (any explorer, not specifically Scan) | Full profile: all credentials, trust path, endpoints, history, delegation chain |
 
-| Threat | Mitigation |
-|--------|-----------|
-| Query privacy (resolution leaks counterparty interest) | Mandatory TLS 1.3, batch resolve endpoint, local TTL caching, optional mTLS |
-| Name squatting on permissionless resolvers | T4 credentials are rejected by institutional policies; collision detection catches conflicts |
-| Network confusion attacks (TestNet name on MainNet) | Network discriminator in FQPNs; resolution engine rejects cross-network results |
-| Delegation chain forgery | Mandatory chain verification back to a verified parent; dual-signature requirement |
-| Denial of service against Resolution Service | Rate limiting (1,000 req/min default), DDoS mitigation, degradation to cached results |
-| Stale cache serving revoked names | Changelog subscription for proactive invalidation; 60-second max revocation propagation |
+The full profile (L3) MAY be hosted by any explorer — Scan or third-party — without changing the underlying credential data. The fallback chain when claims are absent is: display name claim → CNS 1.0 entry → Party-ID prefix → truncated Party ID.
 
-Trust-layer threats (credential replay, issuer impersonation, encrypted field attacks) are addressed in CIP-YYYY.
+#### 9.3 Profile Rendering Guidelines
 
+Profile claims (`cns-2.0/name`, `cns-2.0/avatar`, `cns-2.0/email`, `cns-2.0/website`) are informational only and MUST NOT be interpreted as verified identity attributes. Display names SHOULD be ≤64 Unicode characters and SHOULD be screened for confusable characters under Unicode UTS #39 (General Security Profile, Identifier_Type, Highly Restrictive script restriction). Avatars SHOULD be `https://` URLs; applications MAY additionally support `ipfs://` URIs.
 
-## Implementation
+### 10. Collision Management
 
-A reference implementation is proposed separately as a Canton Protocol Development Fund grant (PR to `canton-dev-fund`). Funding scope, milestones, and budget are defined in that grant proposal and are intentionally kept out of this CIP, so that standards review and funding review remain independent.
+Collisions occur when two or more resolvers return different Party IDs for the same `(network, name)` pair. The Composition Engine detects collisions deterministically per Section 4.2.
 
+#### 10.1 Collision Policies
 
-## Companion Documents
+| Policy | Behavior |
+|--------|----------|
+| `strict` | Returns status `COLLISION` with all candidates and their trust paths; the application must present a disambiguation UI |
+| `permissive` | Selects the highest-weight result; attaches a collision warning to the response |
 
-- CIP-YYYY: Party Identity Verification — Trust tier model, verification policies, credential mapping, encrypted fields, vLEI verification, cross-chain identity
-- [CPRP-spec.md](./CPRP-spec.md) — Shared full technical specification (~3,400 lines) covering both CIPs, with appendices for use cases, architecture, and migration.
+#### 10.2 Realistic Collisions
+
+The realistic causes of collisions are not primarily adversarial. They include:
+
+- Legitimate homonyms — two different real entities with the same short name (e.g. two banks both named "TSB" registering in different jurisdictions through different featured resolvers).
+- Low-metadata retail names — a name like `dave.canton` with little disambiguating metadata across multiple registrants.
+
+In both cases CPRP's role is disambiguation via trust path, not unilateral selection: the engine presents all candidates with their evidence and the consuming application's strategy decides.
+
+#### 10.3 Collision Rate Reduction
+
+Reducing the rate of collisions at the source is the responsibility of allocation policy in the `.canton` CIP (which, for example, prohibits DNS TLDs from being issued as `cns` names per Section 2.5) and in the operational practices of other registrars. CPRP does not allocate names; it detects and surfaces.
+
+#### 10.4 Cross-Resolver Arbitration (deferred)
+
+Binding governance arbitration of disputed name-to-party mappings across featured resolvers is deferred to the future governance CIP. This CIP defines detection and surfacing only; the on-ledger arbitration credential and the escalation procedure will be specified by that CIP.
+
+### 11. Asset Naming (Extension Point)
+
+Under the Canton token standard, an instrument is identified by an `InstrumentId` of `{ admin: Party; id: Text }`. An asset is therefore naturally a subname of its administering party, not a standalone top-level name.
+
+CPRP accommodates this by resolving the admin party to its verified FQPN and treating the instrument `id` as a delegated subname beneath the admin's registrar, reusing the name-delegation mechanism of Section 8.2.
+
+Worked example: an instrument administered by BlackRock resolves by first resolving the admin party to `mainnet;dns;blackrock.com;default`, then discovering the admin's token-standard off-ledger API via its `cprp/endpoint:token-admin` credential, and querying that API at the token-standard `/registry/metadata/v1/instruments/{id}` endpoint for the published symbol.
+
+A future CIP would define an asset-specific variant of the `resolve` method that takes an `InstrumentId` and returns the administering party's verified FQPN together with the instrument metadata, plus asset metadata claim keys (e.g. `cprp-asset/isin`, `cprp-asset/cusip`, `cprp-asset/token-standard`). An asset inherits the trust tier of its administering party. This keeps asset naming consistent with party naming — one resolution and delegation model rather than a parallel scheme — and aligns with CIP-56 token-admin endpoint discovery.
+
+### 12. The `.canton` Namespace
+
+The `.canton` extension is a human-readable, Canton-native naming convention (not a DNS TLD — there is no `.canton` entry in the DNS root). Allocation, uniqueness, and governance of `.canton` names are defined by the `.canton` CIP led by Axymos (PR #209), not by this CIP. Within CPRP, `.canton` names are:
+
+- Network-scoped — `acme-bank.canton` on MainNet is distinct from the same name on TestNet, per the FQPN network discriminator.
+- Verification-independent — a resolved `.canton` name carries whatever trust tier its `cns` registrar and credentials establish under CIP-YYYY; the `.canton` suffix itself confers no trust.
+- Composable — `.canton` results compose alongside imported names (DNS, vLEI, etc.) in the same query, per the strategies of Section 4.
+
+Examples as seen by CPRP:
+
+- `alice.canton` — an individual name issued by a `cns` registrar under the `.canton` CIP; resolved and trust-evaluated by CPRP like any other source.
+- `goldmansachs.canton` — an institution's Canton-native name; may coexist with the same institution's DNS-verified name in the composition result.
+- `treasury.acme.canton` — a delegated subname under `acme.canton`, verified via the delegation chain of Section 8.2.
+
+Users type `alice.canton` directly. The FQPN infrastructure is invisible — resolvers and registrars are handled by the SDK, just as DNS root servers and TLD delegation are invisible to web users.
+
+### 13. Backward Compatibility
+
+This CIP is additive. Existing CNS 1.0 names (`name.unverified.cns`) are preserved unchanged; a `cns-v1` resolver plugin wraps the existing `DsoAnsResolver` as a CPRP-compatible resolver. The CN Credentials interface is used as-is; new `cprp/*` claim keys are additive. Scan integration is additive (changelog consumption only). Adoption is entirely opt-in.
+
+A party may upgrade from a CNS 1.0 name to a CPRP-registered name while retaining the CNS 1.0 alias.
+
+## Rationale
+
+### Why multi-resolver
+
+Canton's institutional reality requires multiple, parallel identity sources to coexist. A single naming authority fails this reality. The multi-resolver architecture accommodates DNS, vLEI, ENS, native Canton naming, and address books without requiring global consensus on a single standard.
+
+### Why apps decide
+
+Centralizing resolution policy in the foundation would require defining a single global trust standard, a governance burden the WG explicitly chose to avoid. Pushing the decision to applications keeps the protocol neutral while allowing each application to enforce policies appropriate for its use case.
+
+### Why off-ledger
+
+Resolution queries are high-frequency, low-latency operations. Executing them on-chain would bloat the ACS and degrade ledger performance. A stateless Resolution Service derives all state from on-ledger credentials and provides the same trust guarantees without the performance cost.
+
+### Why credential-native
+
+Encoding name registrations and delegations as standard CN Credentials, rather than as custom Daml templates, means no new Daml code to review and maintain in the core network. It also allows the same standard (PixelPlex's Party Profile Credentials, Digital Asset's CN Credentials Standard) to carry all of this metadata.
+
+### Why the semicolon separator
+
+Every other obvious separator collides with structure that already exists in the components: `:` with Party IDs and URLs, `|` with lowercase L visually, `,` with list syntax. The semicolon is unambiguous in DNS names, email addresses, URLs, and Party IDs.
+
+### Why source icons are universal
+
+Wayne Collier observed that for users to reason about a name they must be able to see where it comes from. Standardized icons for DNS, LEI, ENS, and resolver-governed icons for `cns` registrars give a uniform visual grammar; the alternative — letting applications render names without source attribution — invites confusion and impersonation.
+
+## Companion CIPs
+
+- CIP-YYYY (Party Identity Verification) — defines the trust tier framework (T1–T4), the trust evaluator, verification policies, and the featured-resolver registry that this CIP's composition feeds into.
+- CIP-ZZZZ (Imported Names) — defines per-source verification procedures (DNS, vLEI, ENS, cross-chain) whose credentials this CIP's resolvers serve.
+- `.canton` CIP (Axymos, PR #209) — defines the Canton-native `.canton` namespace, its `cns` registrars, and its allocation policy. Names issued under that CIP flow through this CIP's resolution layer as one source among many.
