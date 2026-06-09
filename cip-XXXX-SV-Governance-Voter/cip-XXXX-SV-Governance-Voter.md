@@ -11,9 +11,9 @@
 
 ## Abstract
 
-The current Splice SV governance flow uses the SV operator party as both the node-automation identity and the governance-voting identity. This CIP adds a first-class governance-voter authority path for a Phase 1 subset of non-operational votes.
+The current Splice SV governance flow uses the SV operator party as both the node-automation identity and the governance-voting identity. This CIP adds a first-class governance-voter authority path for a proposed Phase 1 subset of non-operational votes.
 
-Each SV has one active governance voter declared through a DSO-signed `SvGovernanceVoter` binding. SV onboarding creates a self-binding by default, and later changes use the existing confirmation-quorum flow through a new `SRARC_RotateGovernanceVoter` action. The governance voter may open and cast or update the represented SV's vote on explicitly allowlisted non-operational requests. Operational requests remain on the operator path, and each request/cast choice rejects the wrong path. The vote still counts as the SV's existing vote — it does not create a second voting unit.
+Each SV has one active governance voter declared through a DSO-signed `SvGovernanceVoter` binding. SV onboarding creates a self-binding by default, and later changes use the existing confirmation-quorum flow through a new `SRARC_RotateGovernanceVoter` action. The governance voter may open and cast or update the represented SV's vote on non-operational requests in the proposed Phase 1 allowlist. Operational requests remain on the operator path, and each request/cast choice rejects the wrong path. The vote still counts as the SV's existing vote — it does not create a second voting unit.
 
 The on-ledger surface is intentionally compatible with the external-party submission flow defined by [CIP-0103][cip-0103]: the existing request and cast choices take optional binding arguments, the governance-voter path is controlled by the governance-voter party, and the binding can be sourced through Scan and supplied as a disclosed contract. The dApp client, Scan-based discovery, and wallet/signing-provider choices live downstream of this CIP.
 
@@ -32,7 +32,7 @@ This CIP covers the first contract slice needed for a separated SV governance-vo
 This CIP standardizes the following contract-level behavior:
 
 - A DSO-signed `SvGovernanceVoter` binding authorizes a governance voter to act only on governance-voter-eligible requests for the represented SV.
-- `isGovernanceVoterAction` is a hardcoded Phase 1 allowlist; new action constructors remain operator-only until explicitly classified.
+- `isGovernanceVoterAction` is a hardcoded proposed Phase 1 allowlist; new action constructors remain operator-only until explicitly classified through CIP/package review.
 - The contract change is limited to the adjacent governance-voter module, optional governance-voter arguments on existing `DsoRules` request/cast/close choices, vote attribution fields, and binding lifecycle choices.
 - Both authority paths write the represented SV's single vote slot; attribution records who signed and which binding was used, not additional weight.
 - The contract surface is compatible with explicit-disclosure submission by a governance voter; production read/API packaging is downstream implementation work.
@@ -107,7 +107,7 @@ Operator votes use `castBy = Some sv`, `castByRole = Some VCR_Operator`, and `bi
 
 ### Governance-Voter Action Classifier
 
-The classifier is allowlist-based. New `ActionRequiringConfirmation` constructors do not become governance-voter-eligible by default; the classifier must be extended deliberately.
+The classifier is allowlist-based. New `ActionRequiringConfirmation` constructors do not become governance-voter-eligible by default; the classifier must be extended deliberately through CIP/package review.
 
 ```daml
 isGovernanceVoterAction : ActionRequiringConfirmation -> Bool
@@ -152,20 +152,22 @@ These are distinct from binding, authority, and request-state errors surfaced el
 
 The Phase 1 split follows from the current Splice governance flow: proposal review, vote preparation, signing, and submission are all routed through the SV application and the SV operator identity path. That path is appropriate for node automation and operational workflows, but it also makes policy voting depend on node-operator credentials. The classification below separates actions that express governance intent from actions that operate, onboard, bootstrap, or automate SV infrastructure.
 
-Governance-voter-eligible actions are those that satisfy all of these conditions:
+The allowlist is a proposed Phase 1 governance boundary, not a claim that every constructor has an intrinsic or permanent classification. Some actions can have both policy and operational consequences; their inclusion or exclusion should be validated during CIP and maintainer review.
+
+Governance-voter-eligible actions in this proposed Phase 1 boundary satisfy all of these conditions:
 
 1. The action is explicitly allowlisted in `isGovernanceVoterAction`.
 2. The action expresses policy, configuration, reward, application-status, activity-accounting, or governance-membership intent.
 3. The action does not give the governance voter authority to operate an SV node, confirm or execute actions, onboard SVs, bootstrap external-party infrastructure, run round automation, or control payment workflows.
 
-The Phase 1 governance-voter allowlist is:
+The proposed Phase 1 governance-voter allowlist is:
 
 - `SRARC_GrantFeaturedAppRight`: featured-app status governance.
 - `SRARC_RevokeFeaturedAppRight`: featured-app status governance.
 - `SRARC_SetConfig`: DSO rules configuration governance.
 - `SRARC_UpdateSvRewardWeight`: reward-weight policy governance.
 - `SRARC_CreateUnallocatedUnclaimedActivityRecord`: governance-approved activity or reward accounting.
-- `SRARC_OffboardSv`: governance-membership decision.
+- `SRARC_OffboardSv`: high-impact governance-membership decision; included for Phase 1 validation.
 - `CRARC_SetConfig`: Amulet rules configuration governance.
 
 The following categories remain operator-only in Phase 1:
@@ -177,7 +179,7 @@ The following categories remain operator-only in Phase 1:
 - ANS payment workflow actions.
 - Any `ActionRequiringConfirmation` constructor not explicitly listed by `isGovernanceVoterAction`.
 
-This classification preserves the current one-vote-per-SV governance model while moving only non-operational policy voting onto the governance-voter authority path.
+This classification preserves the current one-vote-per-SV governance model while moving only the proposed non-operational policy-voting subset onto the governance-voter authority path.
 
 ### Vote Request Creation
 
@@ -207,7 +209,7 @@ nonconsuming choice DsoRules_RequestVote : DsoRules_RequestVoteResult
         -- initial vote is VCR_GovernanceVoter and records bindingCid = Some cid.
 ```
 
-The governance voter is the creator of a non-operational vote request, consistent with the design intent that operational voting remains an operator concern and non-operational voting belongs to the governance voter (which may be the SV itself under the self-binding default).
+The governance voter is the creator of an allowlisted non-operational vote request, consistent with the design intent that operational voting remains an operator concern and non-operational voting belongs to the governance voter (which may be the SV itself under the self-binding default). This does not broaden request creation for operational actions: `DsoRules_RequestVote` rejects the governance-voter path unless `isGovernanceVoterAction action == True`, and rejects the operator path for governance-voter-eligible actions.
 
 On the governance-voter path, `DsoRules_RequestVote` records an auto-accept initial vote for the represented SV (`castBy = Some governanceVoter`, `castByRole = Some VCR_GovernanceVoter`, `bindingCid = Some cid`, `accept = True`, reason "I accept, as I requested the vote.") mirroring the operator path's convention. The initial vote occupies the represented SV's slot in `VoteRequest.votes` and may be updated through `DsoRules_CastVote` while the request is still open.
 
@@ -307,13 +309,13 @@ The write path is not enough. A governance voter must be able to inspect the pro
 
 Phase 1 uses the following visibility position:
 
-- `SvGovernanceVoter` is not visible to the governance voter by observer. The governance voter discovers the binding through Scan/read APIs or receives it as a disclosed contract.
-- Proposal discovery and proposal-detail rendering are served through Scan or an SV-hosted read API rather than by making every proposal contract directly visible for browsing.
-- The supported unaffiliated-voter submit path is explicit disclosure: the governance voter submits the target contract IDs together with the disclosed contracts needed to exercise `DsoRules_CastVote` on the governance-voter path.
-- SV-hosted submission or relay remains a valid deployment option, but it is not required by the on-ledger design.
-- Scan or an SV-hosted read API returns the proposal details, binding information, and disclosed-contract material needed for proposal inspection and submission, similar to the existing `AmuletRules` flow used by validators.
+- `SvGovernanceVoter` is not visible to the governance voter by observer. The governance voter discovers the binding through Scan or receives it as a disclosed contract.
+- Proposal discovery and proposal-detail rendering are served through Scan rather than by making every proposal contract directly visible for browsing.
+- The expected unaffiliated-voter submit path is explicit disclosure: the governance voter submits the target contract IDs together with the disclosed contracts needed to exercise `DsoRules_CastVote` on the governance-voter path.
+- SV-hosted submission or relay remains a valid deployment option, but it is not required by the on-ledger design and is not the discovery model standardized by this CIP.
+- Scan returns the proposal details, binding information, and disclosed-contract material needed for proposal inspection and explicit-disclosure submission, similar to the existing `AmuletRules` flow used by validators.
 
-This CIP is compatible with external participant submission and leaves the exact read/disclosure API packaging to downstream implementation.
+This CIP is compatible with external participant submission and leaves the exact Scan endpoint packaging to downstream implementation. It does not require governance-voter submission to be fully independent of the SV node, but it also does not preclude independent submission when the needed disclosed contracts are available.
 
 ### Security Considerations
 
@@ -335,7 +337,7 @@ The operator party runs or controls the SV node, signs automation commands, and 
 
 Today an SV-funded organization that wants direct, auditable governance participation must hold node-operator credentials. The status quo also offers no way to distinguish, in a vote record, whether a vote was cast through an operator-automation path or by a human governance representative.
 
-This CIP separates governance voting from node operation on the ledger without redesigning either. The governance voter is a signer for the represented SV's vote on an explicit allowlist of non-operational actions, not a new voting unit. The SV remains the unit of voting weight; the cast simply carries an accountability stamp identifying which party signed it through which authority path.
+This CIP separates governance voting from node operation on the ledger without redesigning either. The governance voter is a signer for the represented SV's vote on a proposed explicit allowlist of non-operational actions, not a new voting unit. The SV remains the unit of voting weight; the cast simply carries an accountability stamp identifying which party signed it through which authority path.
 
 ## Rationale
 
@@ -349,7 +351,7 @@ Optional governance-voter arguments on `DsoRules_RequestVote` and `DsoRules_Cast
 
 The one-vote-per-node model is preserved by continuing to store the vote under the represented SV's existing `VoteRequest.votes` slot. The governance voter signs the SV's vote; it does not become a new voting unit. The map key remains `Text` for upgrade compatibility, while `Vote.sv` carries the represented SV party used for tallying and staleness checks.
 
-`SRARC_OffboardSv` is intentionally included in the Phase 1 allowlist because offboarding is a governance-membership decision rather than a node-operation decision. The high-impact path is paired with clear UI warnings, reason quality expectations, and tests, but it does not move back to the operator-only bucket. This CIP also does not exclude the target SV from voting on its own offboarding; it preserves the current represented-SV voting semantics and treats any target-party voting restriction as a separate governance-process decision.
+`SRARC_OffboardSv` is intentionally included in the proposed Phase 1 allowlist because offboarding is a governance-membership decision rather than a node-operation decision. Because it is high impact, that inclusion should be validated during CIP review and paired with clear UI warnings, reason quality expectations, and tests. This CIP also does not exclude the target SV from voting on its own offboarding; it preserves the current represented-SV voting semantics and treats any target-party voting restriction as a separate governance-process decision.
 
 ### CIP-0103 Compatibility
 
@@ -357,7 +359,7 @@ The one-vote-per-node model is preserved by continuing to store the vote under t
 
 - `DsoRules_CastVote` is controlled by `fromOptional vote.sv castBy`; on the governance-voter path, `castBy = Some governanceVoter` and `bindingCid = Some binding`.
 - The binding can be sourced through Scan and supplied as a disclosed contract by a CIP-0103-conforming Wallet.
-- The cast does not require visibility on contracts unique to the SV node, so the governance voter can submit through a participant that is not the SV's participant once the read-side visibility model is settled.
+- The cast does not require visibility on contracts unique to the SV node, so the governance voter can submit through a participant that is not the SV's participant when Scan supplies the needed contract IDs and disclosed contracts.
 
 `Requires: CIP-0103` is intentionally not asserted in the preamble: the on-ledger surface defined here is independently useful and does not depend on CIP-0103 being adopted. The relationship is one of compatibility, not dependence.
 
