@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Audit Request",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "request_timestamp": { "type": "string", "format": "date-time" },
+    "app_provider": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "organization": { "type": "string" },
+        "repository_url": { "type": "string", "format": "uri" }
+      },
+      "required": ["name", "email", "organization", "repository_url"]
+    },
+    "package_information": {
+      "type": "object",
+      "properties": {
+        "package_id": { "type": "string" },
+        "package_name": { "type": "string" },
+        "version": { "type": "string" },
+        "package_hash": {
+          "type": "object",
+          "properties": {
+            "algorithm": { "type": "string" },
+            "value": { "type": "string" }
+          },
+          "required": ["algorithm", "value"]
+        },
+        "download_url": { "type": "string", "format": "uri" },
+        "metadata_url": { "type": "string", "format": "uri" }
+      },
+      "required": ["package_id", "package_name", "version", "package_hash", "download_url", "metadata_url"]
+    },
+    "audit_scope": {
+      "type": "object",
+      "properties": {
+        "security_properties_to_verify": { "type": "array", "items": { "type": "string" } },
+        "focus_areas": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["security_properties_to_verify", "focus_areas"]
+    },
+    "timeline": {
+      "type": "object",
+      "properties": {
+        "requested_completion_date": { "type": "string", "format": "date-time" },
+        "preferred_audit_start_date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requested_completion_date", "preferred_audit_start_date"]
+    }
+  },
+  "required": ["schema_version", "request_id", "request_timestamp", "app_provider", "package_information", "audit_scope", "timeline"]
+}
