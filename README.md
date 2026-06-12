@@ -112,3 +112,4 @@ Global Synchronizer CIPs
 | [cip-0116](/cip-0116/cip-0116.md) |  | Featured App Staking | Eric Saraniecki | Tokenomics | Active |
 | [cip-0117](/cip-0117/cip-0117.md) |  | Logical Synchronizers| Wayne Collier, Moritz Kiefer, Rafael Guglielmetti | Standards Track | Approved |
 | [cip-0118](/cip-0118/cip-0118.md) |  | Add Franklin Templeton as a Super Validator (max weight 5) | Sandy Kaul | Governance | Approved |
+| [cip-0119](/cip-0118/cip-0119.md) |  | Free Canton Coin Transfer-Preapproval Base Duration | Moritz Kiefer, Simon Meier | Tokenomics | Proposed |
