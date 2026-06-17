@@ -55,7 +55,7 @@ Global Synchronizer CIPs
 | [cip-0057](/cip-0057/cip-0057.md) |  | Add Quantstamp as a Weight 1 Super Validator | Eric Saraniecki | Governance  | Final |
 | [cip-0058](/cip-0058/cip-0058.md) |  | Add IntellectEU as Weight 1 SV |Christopher Kelly | Governance  | Final |
 | [cip-0059](/cip-0059/cip-0059.md) |  | Add Woodside AI as an SV of Weight 10 | Eric Saraniecki | Governance  | Withdrawn |
-| [cip-0060](/cip-0060/cip-0060.md) |  | Add Zero Hash as SV of Weight 7.5 | Eric Saraniecki | Governance  | Approved |
+| [cip-0060](/cip-0060/cip-0060.md) |  | Add Zero Hash as SV of Weight 7.5 | Eric Saraniecki | Governance  | Final |
 | [cip-0061](/cip-0061/cip-0061.md) |  | Add Chainlink as a Super Validator of Weight 7.5 | Thodoris Karakostas | Governance  | Final |
 | [cip-0062](/cip-0062/cip-0062.md) |  | Synchronizer Migration with Downtime to Splice 0.4.0 / Canton 3.3| Curtis Hrischuk| Standards | Final |
 | [cip-0063](/cip-0063/cip-0063.md) |  | Add Kaiko as a Super Validator of Weight 6.5 | Ambre Soubiran | Governance  | Final |
@@ -67,7 +67,7 @@ Global Synchronizer CIPs
 | [cip-0069](/cip-0069/cip-0069.md) |  | Add Ledger as an SV of Weight 5| Eric Saraniecki | Governance | Final |
 | [cip-0070](/cip-0070/cip-0070.md) |  | Adjusting Reward Caps for Validators | Chris Zuehlke | Tokenomics | Withdrawn |
 | [cip-0071](/cip-0071/cip-0071.md) |  | Add Ubyx as an SV of Weight 5| Tony McLaughlin| Governance | Final |
-| [cip-0072](cip-0072/cip-0072.md) |  | Add Fireblocks as an SV of Weight 5 | Eric Saraniecki  | Governance | Approved |
+| [cip-0072](cip-0072/cip-0072.md) |  | Add Fireblocks as an SV of Weight 5 | Eric Saraniecki  | Governance | Final |
 | [cip-0073](/cip-0073/cip-0073.md) |  | Weighted Validator Liveness Rewards for SV-Determined Parties| Moritz Kiefer | Tokenomics| Approved |
 | [cip-0074](/cip-0074/cip-0074.md) |  | Add BitGo as an SV of Weight 5| Eric Saraniecki  | Governance | Approved |
 | [cip-0075](/cip-0075/cip-0075.md) |  | Add Zodia as a SV with max weight 5| Eric Saraniecki  | Governance | Approved |
@@ -75,18 +75,18 @@ Global Synchronizer CIPs
 | [cip-0077](/cip-0077/cip-0077.md) |  | Add Taurus as an SV of Weight 5 | Victor Busson | Governance | Approved |
 | [cip-0078](/cip-0078/cip-0078.md) |  | Canton Coin Fee Removal| Simon Meier | Tokenomics | Final |
 | [cip-0079](/cip-0079/cip-0079.md) |  | SV Readiness — Demonstrate Third-Party Price Feed Integration for CC Listing|Eric Saraniecki | Governance | Approved |
-| [cip-0080](/cip-0080/cip-0080.md) |  | Add Republic as an SV of Weight 6 | Luca Burlando | Governance | Approved |
+| [cip-0080](/cip-0080/cip-0080.md) |  | Add Republic as an SV of Weight 6 | Luca Burlando | Governance | Final |
 | [cip-0081](/cip-0081/cip-0081.md) |  | Add YZi Labs as Weight 10 SV |Eric Saraniecki | Governance | Approved |
-| [cip-0082](/cip-0082/cip-0082.md) |  | Establish a 5% Development Fund (Foundation-Governed) |Eric Saraniecki | Governance | Approved |
+| [cip-0082](/cip-0082/cip-0082.md) |  | Establish a 5% Development Fund (Foundation-Governed) |Eric Saraniecki | Governance | Final |
 | [cip-0083](/cip-0083/cip-0083.md) |  | DTCC Super Validator Participation |Eric Saraniecki | Governance | Approved |
 | [cip-0084](/cip-0084/cip-0084.md) |  | Tokenomics Committee to Recommend $/MB Price Tuning| Eric Saraniecki | Tokenomics | Approved |
-| [cip-0085](/cip-0085/cip-0085.md) |  | Add Talos as Weight 6.5 SV |Anton Katz| Governance | Approved |
+| [cip-0085](/cip-0085/cip-0085.md) |  | Add Talos as Weight 6.5 SV |Anton Katz| Governance | Final |
 | [cip-0086](/cip-0086/cip-0086.md) |  |ERC-20 Middleware and Distributed Indexer for Canton Network |Eric Saraniecki | Tokenomics | Approved |
 | [cip-0087](/cip-0087/cip-0087.md) |  | Add Hex Trust as a Super Validator (Weight 3) | Giorgia Pellizzari, Alessio Quaglini | Governance | Approved |
-| [cip-0089](/cip-0089/cip-0089.md) |  |Synchronizer Migration with Downtime to Splice 0.5.0 / Canton 3.4|Curtis Hrischuk| Tokenomics | Approved |
+| [cip-0089](/cip-0089/cip-0089.md) |  |Synchronizer Migration with Downtime to Splice 0.5.0 / Canton 3.4|Curtis Hrischuk| Tokenomics | Final |
 | [cip-0090](/cip-0090/cip-0090.md) |  |Onboard USDT0 to Canton — Outcome-Linked SV Weight (Max 10) |Eric Saraniecki | Governance | Approved |
 | [cip-0091](/cip-0091/cip-0091.md) |  |Add Zenith as an SV of Weight 10|Norbert Vadas, Teemu Paivinen, Heslin Kim, Henri Kamarainen| Governance | Approved |
-| [cip-0092](/cip-0092/cip-0092.md) |  |Controlled Transition to Dynamic Market Feeds Post-Listing of Canton Coin (CC)|Eric Saraniecki| Governance | Approved |
+| [cip-0092](/cip-0092/cip-0092.md) |  |Controlled Transition to Dynamic Market Feeds Post-Listing of Canton Coin (CC)|Eric Saraniecki| Governance | Final |
 | [cip-0093](/cip-0093/cip-0093.md) |  | Add Bosphorus SV (BSV) as a Super Validator (Max Weight 6) | Eric Saraniecki | Governance | Approved |
 | [cip-0094](/cip-0094/cip-0094.md) |  | Add Blockdaemon as a Super Validator (weight 5.0) | Brad Turner, Demo Skalkotos, Jesse Farese | Governance | Approved |
 | [cip-0095](/cip-0095/cip-0095.md) |  | Onboard Mesh to Canton — Outcome-Linked SV Weight (Max 10) | Jacob McCrum  | Governance | Approved |
@@ -94,7 +94,7 @@ Global Synchronizer CIPs
 | [cip-0097](/cip-0097/cip-0097.md) |  | Nasdaq Super Validator Participation | Eric Saraniecki | Governance | Approved |
 | [cip-0098](/cip-0098/cip-0098.md) |  | Cap Per-Transaction Application Rewards at $1.50 | Eric Saraniecki | Tokenomics | Approved |
 | [cip-0099](/cip-0099/cip-0099.md) |  | Zero Hash Modifications to Adoption Incentive  | Eric Saraniecki | Governance | Approved |
-| [cip-0100](/cip-0100/cip-0100.md) |  | Governance of the CIP-0082 Development Fund  | Bernhard Elsner | Governance | Approved |
+| [cip-0100](/cip-0100/cip-0100.md) |  | Governance of the CIP-0082 Development Fund  | Bernhard Elsner | Governance | Final |
 | [cip-0102](/cip-0102/cip-0102.md) |  | Add Tharimmune as a SV of weight 4  | Mark Wendland  | Governance | Approved |
 | [cip-0103](/cip-0103/cip-0103.md) |  | dApp Standard| Marc Juchli, Alexey Chyker, Eugene Birski| Standards Track | Approved |
 | [cip-0104](/cip-0104/cip-0104.md) |  | Traffic-Based App Rewards | Simon Meier | Tokenomics | Approved|
