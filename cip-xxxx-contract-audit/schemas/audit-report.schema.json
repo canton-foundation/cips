@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Security Audit Report",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "audit_id": { "type": "string", "format": "uuid" },
+    "audit_report_version": { "type": "string" },
+    "auditor": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "organization": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "public_key_id": { "type": "string" },
+        "repository_url": { "type": "string", "format": "uri" }
+      },
+      "required": ["name", "organization", "email", "repository_url"]
+    },
+    "package_under_review": {
+      "type": "object",
+      "properties": {
+        "package_id": { "type": "string" },
+        "package_name": { "type": "string" },
+        "version": { "type": "string" },
+        "package_hash": {
+          "type": "object",
+          "properties": {
+            "algorithm": { "type": "string" },
+            "value": { "type": "string" }
+          },
+          "required": ["algorithm", "value"]
+        },
+        "app_provider_name": { "type": "string" },
+        "app_provider_repository": { "type": "string", "format": "uri" },
+        "audit_request_url": { "type": "string", "format": "uri" }
+      },
+      "required": ["package_id", "package_name", "version", "package_hash", "app_provider_name", "app_provider_repository"]
+    },
+    "audit_metadata": {
+      "type": "object",
+      "properties": {
+        "audit_date": { "type": "string", "format": "date-time" },
+        "audit_completion_date": { "type": "string", "format": "date-time" },
+        "auditor_reviewer": { "type": "string" },
+        "review_hours_spent": { "type": "integer" },
+        "audit_scope": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["audit_date", "audit_completion_date", "audit_scope"]
+    },
+    "overall_assessment": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["passed", "conditionally_passed", "failed"] },
+        "severity_rating": { "type": "string", "enum": ["none", "low", "medium", "high", "critical"] },
+        "summary": { "type": "string" },
+        "recommendation": { "type": "string", "enum": ["recommended_for_production", "acceptable_with_caveats", "not_recommended"] }
+      },
+      "required": ["status", "severity_rating", "summary", "recommendation"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "finding_id": { "type": "string" },
+          "category": { "type": "string", "enum": ["authorization", "confidentiality", "integrity", "dependency", "best_practice", "performance"] },
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low", "informational"] },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "affected_components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "module": { "type": "string" },
+                "location": { "type": "string" },
+                "code_hash": { "type": "string" }
+              }
+            }
+          },
+          "remediation_status": { "type": "string", "enum": ["open", "in_progress", "resolved", "accepted_risk"] }
+        },
+        "required": ["finding_id", "category", "severity", "title", "description", "remediation_status"]
+      }
+    },
+    "compliance_checklist": { "type": "object" },
+    "validity": {
+      "type": "object",
+      "properties": {
+        "issued_date": { "type": "string", "format": "date-time" },
+        "expiration_date": { "type": "string", "format": "date-time" },
+        "audit_is_valid": { "type": "boolean" }
+      },
+      "required": ["issued_date", "expiration_date", "audit_is_valid"]
+    },
+    "signature": {
+      "type": "object",
+      "properties": {
+        "algorithm": { "type": "string" },
+        "public_key_id": { "type": "string" },
+        "signature_value": { "type": "string" }
+      },
+      "required": ["algorithm", "public_key_id", "signature_value"]
+    }
+  },
+  "required": ["schema_version", "audit_id", "auditor", "package_under_review", "audit_metadata", "overall_assessment", "validity", "signature"]
+}

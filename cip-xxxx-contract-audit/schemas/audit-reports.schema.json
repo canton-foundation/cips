@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Audit Reports Summary",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "package_id": { "type": "string" },
+    "package_version": { "type": "string" },
+    "package_hash": {
+      "type": "object",
+      "properties": {
+        "algorithm": { "type": "string" },
+        "value": { "type": "string" }
+      }
+    },
+    "audit_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "auditor_name": { "type": "string" },
+          "audit_date": { "type": "string", "format": "date-time" },
+          "audit_report_url": { "type": "string", "format": "uri" },
+          "audit_status": { "type": "string", "enum": ["passed", "conditionally_passed", "failed"] },
+          "severity_rating": { "type": "string", "enum": ["none", "low", "medium", "high", "critical"] },
+          "expiration_date": { "type": "string", "format": "date-time" }
+        },
+        "required": ["auditor_name", "audit_date", "audit_report_url", "audit_status"]
+      }
+    }
+  },
+  "required": ["schema_version", "package_id", "package_version", "package_hash", "audit_results"]
+}
