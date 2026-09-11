@@ -114,5 +114,5 @@ Global Synchronizer CIPs
 | [cip-0118](/cip-0118/cip-0118.md) |  | Add Franklin Templeton as a Super Validator (max weight 5) | Sandy Kaul | Governance | Approved |
 | [cip-0119](/cip-0119/cip-0119.md) |  | Free Canton Coin Transfer-Preapproval Base Duration | Moritz Kiefer, Simon Meier | Tokenomics | Approved |
 | [cip-0120](/cip-0120/cip-0120.md) |  | Traffic-Based Validator Rewards and Confirming Validator Incentives | David Richards, Simon Meier, Bernhard Elsner | Tokenomics | Proposed |
-| [cip-0121](/cip-0121/cip-0121.md) |  | Shinhan Asset Management Super Validator Weight 10 |Eric Saraniecki | Governance | Proposed |
+| [cip-0121](/cip-0121/cip-0121.md) |  | Shinhan Asset Management Super Validator Weight 10 |Eric Saraniecki | Governance | Approved |
 | [cip-0122](/cip-0122/cip-0122.md) |  | Add TreasurySpring Management (Jersey) Limited as a Super Validator (max weight 4) | Matthew Longhurst | Governance | Approved |
