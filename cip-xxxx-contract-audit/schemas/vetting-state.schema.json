@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Application Vetting State",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "app_name": { "type": "string" },
+    "network": { "type": "string", "enum": ["mainnet", "devnet", "testnet"] },
+    "last_updated": { "type": "string", "format": "date-time" },
+    "vetting_state": {
+      "type": "object",
+      "properties": {
+        "vet": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "package_id": { "type": "string" },
+              "package_version": { "type": "string" },
+              "package_hash": {
+                "type": "object",
+                "properties": {
+                  "algorithm": { "type": "string" },
+                  "value": { "type": "string" }
+                },
+                "required": ["algorithm", "value"]
+              }
+            },
+            "required": ["package_id", "package_version", "package_hash"]
+          }
+        },
+        "unvet": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "package_id": { "type": "string" },
+              "package_version": { "type": "string" },
+              "package_hash": {
+                "type": "object",
+                "properties": {
+                  "algorithm": { "type": "string" },
+                  "value": { "type": "string" }
+                },
+                "required": ["algorithm", "value"]
+              }
+            },
+            "required": ["package_id", "package_version", "package_hash"]
+          }
+        }
+      },
+      "required": ["vet", "unvet"]
+    }
+  },
+  "required": ["schema_version", "app_name", "network", "vetting_state"]
+}

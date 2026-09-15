@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Integration Decision Document",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "validator_node_provider": { "type": "string" },
+    "integration_decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "decision_id": { "type": "string", "format": "uuid" },
+          "package_name": { "type": "string" },
+          "package_version": { "type": "string" },
+          "app_provider": { "type": "string" },
+          "decision_date": { "type": "string", "format": "date-time" },
+          "decision": { "type": "string", "enum": ["integrated", "rejected", "conditionally_integrated"] },
+          "integration_status": { "type": "string", "enum": ["active", "suspended", "deprecated"] },
+          "decision_factors": {
+            "type": "object",
+            "properties": {
+              "audits_reviewed": { "type": "integer" },
+              "audits_passed": { "type": "integer" },
+              "critical_findings": { "type": "integer" },
+              "high_findings": { "type": "integer" },
+              "risk_assessment": { "type": "string", "enum": ["none", "low", "medium", "high", "critical"] },
+              "trust_score": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          },
+          "conditions": { "type": "array", "items": { "type": "string" } },
+          "reviewed_by": { "type": "string" },
+          "decision_notes": { "type": "string" }
+        },
+        "required": ["decision_id", "package_name", "package_version", "app_provider", "decision_date", "decision", "integration_status", "reviewed_by"]
+      }
+    }
+  },
+  "required": ["schema_version", "validator_node_provider", "integration_decisions"]
+}
