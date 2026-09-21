@@ -117,3 +117,5 @@ Global Synchronizer CIPs
 | [cip-0121](/cip-0121/cip-0121.md) |  | Shinhan Asset Management Super Validator Weight 10 |Eric Saraniecki | Governance | Approved |
 | [cip-0122](/cip-0122/cip-0122.md) |  | Add TreasurySpring Management (Jersey) Limited as a Super Validator (max weight 4) | Matthew Longhurst | Governance | Approved |
 | [cip-0123](/cip-0123/cip-0123.md) |  | Add a16z crypto as a Super Validator (Weight up to 10.0) | Eric Saraniecki | Governance | Approved |
+| [cip-0124](/cip-0124/cip-0124.md) |  | London Stock Exchange Group (LSEG) Super Validator Participation | Bud Novin | Governance | Proposed |
+
