@@ -119,4 +119,6 @@ Global Synchronizer CIPs
 | [cip-0123](/cip-0123/cip-0123.md) |  | Add a16z crypto as a Super Validator (Weight up to 10.0) | Eric Saraniecki | Governance | Approved |
 | [cip-0124](/cip-0124/cip-0124.md) |  | London Stock Exchange Group (LSEG) Super Validator Participation | Bud Novin | Governance | Proposed |
 | [cip-0125](/cip-0125/cip-0125.md) |  | Add Paxos as a Super Validator (Weight 8.0) | Eric Saraniecki | Governance | Proposed |
+| [cip-0126](/cip-0126/cip-0126.md) |  | Marex Super Validator Weight 10 | Christiana Chong | Governance | Proposed |
+
 
