@@ -3,7 +3,7 @@
   Title: Holdings-Denominated Capacity Rights
   Author:
     Tokenisys <ds@tokenisys.com>
-  Discussions-To: ds@tokenisys.com
+  Discussions-To: https://lists.sync.global/g/cip-discuss/topic/draft_cip/121390753
   Status: Draft
   Type: Tokenomics
   Created: 2026-08-27
