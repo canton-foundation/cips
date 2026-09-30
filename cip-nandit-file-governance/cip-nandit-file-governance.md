@@ -5,6 +5,7 @@
 * Layer: Daml, Applications
   Title: File Governance for Multi-Party Contracts
   Author: Nandit Mehra (Lighthouse) &lt;nandit@lighthouse.storage&gt;
+  Champion: Zhi Zhang - zhi@edgeandnode.com
 * Discussions-To: cip-discuss@lists.sync.global
   Status: Draft
   Type: Standards Track (Discussion)
