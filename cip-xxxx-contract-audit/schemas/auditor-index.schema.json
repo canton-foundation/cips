@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Security Auditor Index",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "auditor": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "organization": { "type": "string" },
+        "website": { "type": "string", "format": "uri" },
+        "repository_url": { "type": "string", "format": "uri" },
+        "contact_email": { "type": "string", "format": "email" }
+      },
+      "required": ["name", "organization", "repository_url", "contact_email"]
+    },
+    "auditor_profile": {
+      "type": "object",
+      "properties": {
+        "daml_expertise_level": { "type": "string", "enum": ["expert", "advanced", "intermediate"] },
+        "certifications": { "type": "array", "items": { "type": "string" } },
+        "years_in_security": { "type": "integer" },
+        "audit_methodology_url": { "type": "string", "format": "uri" }
+      }
+    },
+    "audit_statistics": {
+      "type": "object",
+      "properties": {
+        "total_audits_completed": { "type": "integer" },
+        "packages_audited": { "type": "integer" },
+        "audits_passed": { "type": "integer" },
+        "audits_with_findings": { "type": "integer" },
+        "audits_failed": { "type": "integer" }
+      }
+    },
+    "recent_audits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "package_name": { "type": "string" },
+          "version": { "type": "string" },
+          "app_provider": { "type": "string" },
+          "audit_date": { "type": "string", "format": "date-time" },
+          "status": { "type": "string", "enum": ["passed", "failed"] },
+          "report_url": { "type": "string", "format": "uri" }
+        },
+        "required": ["package_name", "version", "audit_date", "status", "report_url"]
+      }
+    }
+  },
+  "required": ["schema_version", "auditor", "recent_audits"]
+}

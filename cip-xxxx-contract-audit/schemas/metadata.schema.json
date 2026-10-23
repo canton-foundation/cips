@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Package Metadata",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "package_id": { "type": "string" },
+    "package_name": { "type": "string" },
+    "version": { "type": "string" },
+    "release_date": { "type": "string", "format": "date-time" },
+    "description": { "type": "string" },
+    "publisher": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "organization": { "type": "string" },
+        "public_key_id": { "type": "string" },
+        "repository_url": { "type": "string", "format": "uri" }
+      },
+      "required": ["name", "organization", "repository_url"]
+    },
+    "package_hash": {
+      "type": "object",
+      "properties": {
+        "algorithm": { "type": "string", "enum": ["sha256"] },
+        "value": { "type": "string" }
+      },
+      "required": ["algorithm", "value"]
+    },
+    "file_size_bytes": { "type": "integer" },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "package_id": { "type": "string" },
+          "package_name": { "type": "string" },
+          "version": { "type": "string" },
+          "package_hash": {
+            "type": "object",
+            "properties": {
+              "algorithm": { "type": "string" },
+              "value": { "type": "string" }
+            },
+            "required": ["algorithm", "value"]
+          }
+        },
+        "required": ["package_id", "package_name", "version", "package_hash"]
+      }
+    },
+    "build_reproducibility": {
+      "type": "object",
+      "properties": {
+        "daml_sdk_version": { "type": "string" },
+        "ghc_version": { "type": "string" },
+        "build_timestamp": { "type": "string", "format": "date-time" },
+        "build_parameters": {
+          "type": "object",
+          "properties": {
+            "optimization_level": { "type": "string" },
+            "additional_flags": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "build_instructions_url": { "type": "string", "format": "uri" }
+      },
+      "required": ["daml_sdk_version", "ghc_version", "build_timestamp", "build_instructions_url"]
+    },
+    "security_properties": {
+      "type": "object",
+      "properties": {
+        "daml_stdlib_version": { "type": "string" },
+        "notable_modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "module_name": { "type": "string" },
+              "description": { "type": "string" }
+            },
+            "required": ["module_name", "description"]
+          }
+        }
+      },
+      "required": ["daml_stdlib_version", "notable_modules"]
+    },
+    "licenses": {
+      "type": "object",
+      "properties": {
+        "package_license": { "type": "string" },
+        "dependency_licenses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "package_name": { "type": "string" },
+              "license": { "type": "string" }
+            },
+            "required": ["package_name", "license"]
+          }
+        }
+      },
+      "required": ["package_license", "dependency_licenses"]
+    },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "security_email": { "type": "string", "format": "email" },
+        "support_url": { "type": "string", "format": "uri" }
+      },
+      "required": ["security_email", "support_url"]
+    }
+  },
+  "required": ["schema_version", "package_id", "package_name", "version", "package_hash", "publisher", "build_reproducibility", "security_properties", "licenses", "contact"]
+}
