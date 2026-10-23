@@ -120,7 +120,7 @@ Global Synchronizer CIPs
 | [cip-0124](/cip-0124/cip-0124.md) |  | London Stock Exchange Group (LSEG) Super Validator Participation | Bud Novin | Governance | Approved |
 | [cip-0125](/cip-0125/cip-0125.md) |  | Add Paxos as a Super Validator (Weight 8.0) | Eric Saraniecki | Governance | Approved |
 | [cip-0126](/cip-0126/cip-0126.md) |  | Marex Super Validator Weight 10 | Christiana Chong | Governance | Approved |
-| [cip-0127](/cip-0127/cip-0127.md) |  | On-Chain Enforcement of FA and SV Locking | Jonathan D.K. Gibbons, Simon Meier  | Tokenomics | Proposed |
+| [cip-0127](/cip-0127/cip-0127.md) |  | On-Chain Enforcement of FA and SV Locking | Jonathan D.K. Gibbons, Simon Meier  | Tokenomics | Approved |
 | [cip-0129](/cip-0126/cip-0129.md) |  | Universal Burn and Synchronizer Pricing | Yiannis Varelas, Shaul Kfir | Tokenomics | Proposed |
 
 
