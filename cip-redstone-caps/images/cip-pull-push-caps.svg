@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="352" viewBox="0 0 1000 352" role="img">
+<title>Pull, push and CAPS</title>
+<desc>Three panels. Pull: two parties fetch signed prices off-ledger and hold two valid prices, so a settlement has no canonical one. Push: one price contract signed by the oracle, which is informed of every read. CAPS: a round with time and hash on the ledger, capsules scoped to each client, verification on the consumer's own participant with nobody informed.</desc>
+<style>
+text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; dominant-baseline: central; text-anchor: middle; }
+.th { font-size: 14px; font-weight: 500; }
+.ts { font-size: 12px; }
+rect { stroke-width: 0.5; }
+.signed rect { fill: #AE0822; stroke: #950017; } .signed .th { fill: #FFFFFF; } .signed .ts { fill: #FFE3E3; }
+.seen rect { fill: #FFE3E3; stroke: #E41939; } .seen .th { fill: #3D0309; } .seen .ts { fill: #AE0822; }
+.hidden rect { fill: #F7F7F7; stroke: #D9D9D9; } .hidden .th { fill: #3D0309; } .hidden .ts { fill: #6F6B6B; }
+.ex rect { fill: none; stroke: #E41939; stroke-dasharray: 4 4; } .ex .th { fill: #AE0822; } .ex .ts { fill: #6F6B6B; }
+.note { text-anchor: start; font-size: 12px; fill: #6F6B6B; }
+.band { text-anchor: start; font-size: 13px; font-weight: 500; fill: #3D0309; }
+.arr { stroke: #AE0822; stroke-width: 1.5; fill: none; }
+.view { stroke: #AE0822; stroke-width: 1.5; fill: none; stroke-dasharray: 4 4; }
+.sep { stroke: #BDBDBD; stroke-width: 1; stroke-dasharray: 6 4; }
+.dots { font-size: 16px; fill: #AE0822; }
+</style>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#AE0822" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+<rect x="0" y="0" width="1000" height="352" fill="#FFFFFF" stroke="none"/>
+<text class="band" x="40" y="28">Pull: no canonical fixing</text>
+<text class="band" x="360" y="28">Push: the oracle sees every read</text>
+<text class="band" x="680" y="28">CAPS: a fixing on the ledger, private reads</text>
+<g class="hidden"><rect x="70" y="56" width="220" height="48" rx="8"/>
+<text class="th" x="180.0" y="71.0">Oracle API, off-ledger</text>
+<text class="ts" x="180.0" y="90.0">signed prices on request</text>
+</g>
+<g class="seen"><rect x="40" y="170" width="125" height="48" rx="8"/>
+<text class="th" x="102.5" y="185.0">A holds</text>
+<text class="ts" x="102.5" y="204.0">100.1 at 12:00:01</text>
+</g>
+<g class="seen"><rect x="195" y="170" width="125" height="48" rx="8"/>
+<text class="th" x="257.5" y="185.0">B holds</text>
+<text class="ts" x="257.5" y="204.0">100.3 at 12:00:02</text>
+</g>
+<line x1="102" y1="104" x2="102" y2="167" class="arr" marker-end="url(#arrow)"/>
+<line x1="257" y1="104" x2="257" y2="167" class="arr" marker-end="url(#arrow)"/>
+<g class="ex"><rect x="40" y="284" width="280" height="48" rx="8"/>
+<text class="th" x="180.0" y="299.0">Settlement between A and B</text>
+<text class="ts" x="180.0" y="318.0">both prices are valid; which governs?</text>
+</g>
+<line x1="102" y1="218" x2="102" y2="281" class="arr" marker-end="url(#arrow)"/>
+<line x1="257" y1="218" x2="257" y2="281" class="arr" marker-end="url(#arrow)"/>
+<g class="signed"><rect x="360" y="56" width="280" height="48" rx="8"/>
+<text class="th" x="500.0" y="71.0">One price contract</text>
+<text class="ts" x="500.0" y="90.0">signed by the oracle, read by everyone</text>
+</g>
+<g class="seen"><rect x="360" y="170" width="80" height="48" rx="8"/>
+<text class="th" x="400.0" y="185.0">A</text>
+<text class="ts" x="400.0" y="204.0">reads the price</text>
+</g>
+<line x1="400" y1="167" x2="400" y2="107" class="arr" marker-end="url(#arrow)"/>
+<g class="seen"><rect x="460" y="170" width="80" height="48" rx="8"/>
+<text class="th" x="500.0" y="185.0">B</text>
+<text class="ts" x="500.0" y="204.0">reads the price</text>
+</g>
+<line x1="500" y1="167" x2="500" y2="107" class="arr" marker-end="url(#arrow)"/>
+<g class="seen"><rect x="560" y="170" width="80" height="48" rx="8"/>
+<text class="th" x="600.0" y="185.0">C</text>
+<text class="ts" x="600.0" y="204.0">reads the price</text>
+</g>
+<line x1="600" y1="167" x2="600" y2="107" class="arr" marker-end="url(#arrow)"/>
+<g class="ex"><rect x="360" y="284" width="280" height="48" rx="8"/>
+<text class="th" x="500.0" y="299.0">The oracle is informed of every read</text>
+<text class="ts" x="500.0" y="318.0">who, when and how often</text>
+</g>
+<path d="M640 80 L656 80 L656 308 L643 308" class="view" marker-end="url(#arrow)"/>
+<g class="signed"><rect x="680" y="56" width="280" height="48" rx="8"/>
+<text class="th" x="820.0" y="71.0">Round n: time and hash</text>
+<text class="ts" x="820.0" y="90.0">no price; seen by the readers</text>
+</g>
+<g class="hidden"><rect x="680" y="170" width="130" height="48" rx="8"/>
+<text class="th" x="745.0" y="185.0">Capsule for A</text>
+<text class="ts" x="745.0" y="204.0">unseen by the oracle</text>
+</g>
+<g class="hidden"><rect x="830" y="170" width="130" height="48" rx="8"/>
+<text class="th" x="895.0" y="185.0">Capsule for B</text>
+<text class="ts" x="895.0" y="204.0">unseen by the oracle</text>
+</g>
+<g class="ex"><rect x="680" y="284" width="280" height="48" rx="8"/>
+<text class="th" x="820.0" y="299.0">A and B verify on their own participants</text>
+<text class="ts" x="820.0" y="318.0">against the round's view; nobody is informed</text>
+</g>
+<line x1="745" y1="218" x2="745" y2="281" class="arr" marker-end="url(#arrow)"/>
+<line x1="895" y1="218" x2="895" y2="281" class="arr" marker-end="url(#arrow)"/>
+<path d="M745 167 L745 140 L820 140 L820 107" class="view" marker-end="url(#arrow)"/>
+<path d="M895 167 L895 140 L820 140" class="view"/>
+</svg>
