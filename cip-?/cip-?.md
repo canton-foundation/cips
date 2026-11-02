@@ -22,11 +22,12 @@ Multiple Super Validator Right Owners currently may host their weights on a sing
 The weights of these SV Right Owners are combined and represented on-ledger under the name of the SV Node Operator.
 
 The management of SV Right Owners, along with their weights and beneficiaries, happens off-ledger
-via a configuration file managed by the Super Validator node operators in a public GitHub repository.
+via a configuration file managed by the Super Validator node operators in a public GitHub repository ([link to an example configuration](https://github.com/canton-foundation/configs/blob/be39bf888e46ac030b0f205c69784289482b07d4/configs/MainNet/approved-sv-id-values.yaml)).
 Not only does this not take advantage of the transparency and trust provided by the ledger, but the process of
 applying changes is slow, cumbersome, and must happen serially.
 
 This proposal moves management of SV Right Owners, their weights and beneficiaries onto the ledger.
+Thereby removing friction from the management process, and preparing the code for future changes that require the weights to be represented on-ledger (e.g., [automatic SV underlock enforcement from CIP-0127](https://github.com/canton-foundation/cips/blob/main/cip-0127/cip-0127.md#automatic-enforcement-of-sv-underlocking)).
 
 ## Copyright
 
@@ -78,21 +79,22 @@ After the migration to the new model, SV Nodes no longer have any weight associa
 The `SvInfo.svRewardWeight` field is deprecated. See the Backwards Compatibility section for more information.
 
 #### SV Right Owner Management
-A UI will be built and provided as part of implementing this CIP, in a new dApp for SV Right Owners, so that an SV Right Owner administrator can:
+A dedicated UI will be built and provided as part of implementing this CIP, in a new dApp for SV Right Owners, so that an SV Right Owner administrator can:
 
 - View information about its SV Right Owner status
 - Manage its beneficiaries
 
 This is tied to choices in the Daml model.
+SV Right Owners must use a wallet with [CIP-0103 support](https://github.com/canton-foundation/cips/blob/main/cip-0103/cip-0103.md) to use this new UI.
 
-Both the SV UI and Scan UI include information about SV Right Owners,
+Both the existing SV UI and Scan UI include information about SV Right Owners,
 supported by an endpoint in the Scan API.
 
-A few actions that require a vote are added to the Daml model and the SV UI to manage SV Right Owners in the following ways:
+The following actions that require a vote are added to the Daml model and the SV UI to manage SV Right Owners:
 
 - Add (onboard) an SV Right Owner
   - `DsoRules_AddSvRightOwner`
-- Update an SV Right Owner's reward weight or SV Node
+- Update an SV Right Owner's reward weight or change its hosting SV Node
   - `DsoRules_UpdateSvRightOwnerInfo`
 - Remove (offboard) an SV Right Owner
   - `DsoRules_RemoveSvRightOwner`
@@ -109,6 +111,7 @@ no double-dipping happens.
 
 Within an SV Right Owner, the Daml model guarantees that each beneficiary gets at most one `SvRewardCoupon` per round, with the correct weight.
 Making sure that each such coupon actually gets created will _not_ be enforced by the Daml model.
+The responsibility for the timely creation of the coupons of an SV Right Owner lies solely with their hosting SV Node operator.
 In the case of an SV Node outage (or a malicious SV Node), no coupons are created for any of the SV Right Owners hosted on that SV Node or their beneficiaries.
 
 No UI changes are expected regarding coupon creation.
@@ -117,7 +120,7 @@ No UI changes are expected regarding coupon creation.
 A new choice, `DsoRules.DsoRules_MigrateToOnLedgerSvRightOwners`, is provided to allow migration from the old model to the new.
 The migration does not require any action by existing beneficiaries. Their reward-minting flow is unchanged.
 
-This migration action will require a vote from SVs and will be made available in the voting UI.
+This migration action will require a vote from SVs and will be made available in the SV UI.
 
 #### Changes to SV Node Onboarding Flow
 As SV Nodes no longer have any weight associated with them, the SV Node onboarding flow will be changed to reflect this.
@@ -144,7 +147,7 @@ Keeping SV Right Owner weights completely off-ledger has several problems:
   We have to wait for a vote to conclude before requesting another SV Node weight change.
 - Full trust in SV Nodes is required to manage their SV Right Owners. Each SV Node can arbitrarily change the distribution of its reward allocation every round.
 - SV Right Owners have to depend on their SV Node to change its off-ledger configuration when managing beneficiaries.
-- Further developments that rely on SV Right Owner weight are currently hard to implement (e.g., weighted voting or automatic weight updates).
+- Further developments that rely on SV Right Owner weight are currently hard to implement (e.g., weighted voting or [automatic SV underlock enforcement](https://github.com/canton-foundation/cips/blob/main/cip-0127/cip-0127.md#automatic-enforcement-of-sv-underlocking)).
 - SV Right Owners and their weights are not visible publicly in block explorers and in Scan APIs.
 
 This proposal solves all of these issues and provides a strong base for further developments involving SV weight and rewards.
@@ -153,8 +156,8 @@ This proposal solves all of these issues and provides a strong base for further 
 
 This approach is broadly in line with existing conventions, reuses what exists as much as possible, and is almost fully backward compatible with an easy migration path.
 
-The possibility of storing SV Right Owner information in DsoRules itself, rather than having separate contracts, was considered.
-This has the disadvantage of increasing contention for DsoRules, which might become significant if,
+The possibility of storing SV Right Owner information in `DsoRules` itself, rather than having separate contracts, was considered.
+This has the disadvantage of increasing contention for `DsoRules`, which might become significant if,
 for example, further developments around automated weight updates become a reality.
 
 Having a bulk choice/vote to add/remove/update was also considered but decided against because
@@ -168,15 +171,17 @@ Third-party ledger observability tools might require an update to reflect change
 The implementation affects the existing system only after a migration is voted on and executed.
 
 ### Data model
-The `SvInfo.svRewardWeight` field is deprecated. It will be required to be 0 after migration.
+The `SvInfo.svRewardWeight` field is deprecated. It will be set to 0 during migration and then required to be 0 afterward.
 It is being replaced with `SvRightOwnerInfo.rewardWeight`.
 
-This CIP obsoletes a Daml contract choice related to `svRewardWeight`:
-`DsoRules_UpdateSvRewardWeight` is replaced by the vote `DsoRules_UpdateSvRightOwnerInfo`.
+The choice `DsoRules_UpdateSvRewardWeight` is replaced by `DsoRules_UpdateSvRightOwnerInfo`.
+After the migration, the old choice will be refused.
 
-After the migration, the old choice is refused. In addition, the `svRewardWeight` parameter is deprecated in the following choices:
+In addition, the `svRewardWeight` parameter is deprecated in the following choices:
 - `DsoRules_AddSv`
 - `DsoRules_ConfirmSvOnboarding`
+
+This parameter will be required to be 0. An error message will instruct to set reward weights using new choices.
 
 As a consequence, references in CIP-0111 to `Update Sv Reward Weight` should be understood as updates to `SvRightOwnerInfo` after the migration defined in this proposal is complete.
 
@@ -184,9 +189,7 @@ Moreover, the existing SV onboarding flow will be affected by migration. Any onb
 
 ### Rewards
 The introduction of `SvRightOwner` preserves the existing reward system. However, the Daml reward-creation choice is changing:
-`DsoRules_ReceiveSvRewardCoupon` is replaced by `DsoRules_ReceiveSvRewardCouponV2`.
-
-Up-to-date software will be required for collecting rewards after migration.
+`DsoRules_ReceiveSvRewardCoupon` is replaced by `DsoRules_ReceiveSvRewardCouponV2`. For SV Node Operators, up-to-date software will be required after migration to continue minting coupons.
 
 ## Reference implementation
 
@@ -201,3 +204,4 @@ The implementation can be tracked in the Splice feature fork: https://github.com
 * 2026-10-19: Additional editorial changes.
 * 2026-10-20: Reward during migration section is now more precise.
 * 2026-10-26: Mentioned dApp as a chosen way to deliver beneficiaries management.
+* 2026-10-29: Additional external links. Backwards compatibility section is now more precise about obsoleting `SvInfo.svRewardWeight`.
