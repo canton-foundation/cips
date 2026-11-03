@@ -2,7 +2,7 @@
 
 <pre>
   CIP: ?
-  Layer: Applications
+  Layer: Daml
   Title: Canton Access and Privacy Standard
   Author: RedStone
     Łukasz Kalbarczyk <lukasz@redstone.finance>
@@ -243,15 +243,16 @@ nonconsuming choice Verifier_VerifyFreshness : CheckResult
   with actor : Party; capsule : CapsuleView; asOf : Time
 ```
 
-`Verifier_Verify` (authenticity) returns `Verified dataHash` when the
-content is authentic by the verifier's rules, typically that `payload`
-carries a sufficient set of valid oracle signatures and that `dataPoint` is
-the correct aggregate of it; `dataHash` is the verifier's commitment to the
-content. `Verifier_VerifyRound` (canonicality) passes when the round
-belongs to the capsule's definition, has its round number and fixing time,
-and has as `dataHash` this verifier's commitment to the content.
-`Verifier_VerifyFreshness` passes when the fixing time is acceptable at
-`asOf` by the oracle's window.
+`Verifier_Verify` (authenticity) returns `Verified dataHash` when the content
+is authentic by the verifier's rules, typically that `payload` carries a
+sufficient set of valid oracle signatures and that `dataPoint` is the correct
+aggregate of it; `dataHash` is the verifier's commitment to the content.
+`Verifier_VerifyRound` (canonicality) passes when the round belongs to the
+capsule's definition, has its round number and fixing time, has as `dataHash`
+this verifier's commitment to the content and, where the verifier names
+attestation keys, has as `attestation` one the verifier accepts over the round,
+in its encoding, and `None` where it names none. `Verifier_VerifyFreshness`
+passes when the fixing time is acceptable at `asOf` by the oracle's window.
 
 Requirements:
 
@@ -266,9 +267,15 @@ Requirements:
 - Two instances with the same template and parameters MUST give the same
   verdicts, which is what lets a consumer verify against an instance of
   its own.
+- A verifier MAY name attestation keys. The message a key signs is the
+  verifier's encoding of at least the round number and `dataHash`; how many of
+  the keys must sign, and how their signatures are packed into `attestation`,
+  is the verifier's too. The shipped verifiers take one signature by one of the
+  keys. A key MUST attest the rounds of one definition only.
 
 The signing scheme, the aggregation, the encoding of `payload`, the
-commitment function and the freshness window are the implementation's.
+commitment function, the attestation scheme and the freshness window are
+the implementation's.
 
 #### 3.3 `RoundHead`
 
@@ -283,27 +290,30 @@ data RoundHeadView = RoundHeadView with
     isPaused : Bool
 
 choice RoundHead_CreateRound : CreateRoundResult   -- consuming
-  with actor : Party; content : CapsuleContent
+  with actor : Party; content : CapsuleContent; attestation : Optional Text
 ```
 
-An implementation of `RoundHead_CreateRound` MUST: consume the head, so
-that two concurrent publications are a double spend and the loser creates
-nothing; give the new round the previous number plus one and
-`content.dataPoint.publishedAt` as its timestamp; fail unless that fixing
-time is strictly greater than the previous round's; obtain the verdict of
+An implementation of `RoundHead_CreateRound` MUST: consume the head, so that
+two concurrent publications are a double spend and the loser creates nothing;
+give the new round the previous number plus one and
+`content.dataPoint.publishedAt` as its timestamp; fail unless that fixing time
+is strictly greater than the previous round's; obtain the verdict of
 `Verifier_Verify` from the definition's canonical verifier for the new
-capsule's view, fail on `Rejected`, and record the returned `dataHash` in
-the round; obtain the verdict of `Verifier_VerifyFreshness` with ledger
-time as `asOf` and fail on `Failed`; fail while `isPaused`; create the root
-capsule with `content` unchanged, signed by the operator, with the operator
-as `distributor`; and fail unless `content.license` is a license of this
-definition owned by the operator. The authority to sign the round and the
-root capsule MUST flow from the head, not from the caller, so that
-publication is open to any party the implementation admits. The head
-carries the latest round's number and fixing time itself, so a
-publication depends on no round's existence and retiring one never stops
-the chain. Who signs the head and the rounds, how publication is paused
-and who observes the root capsule are left open.
+capsule's view, fail on `Rejected`, and record the returned `dataHash` in the
+round; obtain the verdict of `Verifier_VerifyFreshness` with ledger time as
+`asOf` and fail on `Failed`; obtain the verdict of `Verifier_VerifyRound` for
+the new capsule's view and the round about to be created, `attestation`
+included, fail on `Failed` and record `attestation` in the round, so that a
+round on the ledger always passes the check; fail while `isPaused`; create the
+root capsule with `content` unchanged, signed by the operator, with the
+operator as `distributor`; and fail unless `content.license` is a license of
+this definition owned by the operator. The authority to sign the round and the
+root capsule MUST flow from the head, not from the caller, so that publication
+is open to any party the implementation admits. The head carries the latest
+round's number and fixing time itself, so a publication depends on no round's
+existence and retiring one never stops the chain. Who signs the head and the
+rounds, how publication is paused and who observes the root capsule are left
+open.
 
 #### 3.4 `Round`
 
@@ -317,6 +327,10 @@ data RoundView = RoundView with
     roundNumber : Int
     timestamp : Time   -- the fixing time
     dataHash : Text    -- the verifier's commitment to the root capsule
+    attestation : Optional Text
+      -- an attestation over the round by the attestation keys of the
+      -- definition's verifier; None on the genesis round and where the
+      -- verifier names no attestation keys
 ```
 
 ```haskell
@@ -469,10 +483,12 @@ A consumer accepts a capsule only after:
 1. **Authenticity.** `Verifier_Verify` on its own verifier instance with
    the capsule's view MUST return `Verified`.
 2. **Canonicality.** `Verifier_VerifyRound` with the capsule's view and the
-   view of the round of the capsule's number for the capsule's definition,
-   read from the consumer's own participant, MUST return `Passed`. A
-   consumer that is not a reader cannot perform this check and SHOULD NOT
-   accept the capsule.
+   view of the round of the capsule's number for the capsule's definition MUST
+   return `Passed`. A reader takes the view from its own participant. A
+   consumer that cannot read the round, because it is not a reader or because
+   the check runs inside a choice another party exercises, takes the view the
+   presenter hands over next to the capsule; where the verifier names no
+   attestation keys, such a consumer SHOULD NOT accept the capsule.
 3. **Freshness.** `Verifier_VerifyFreshness` with the time the consumer
    cares about MUST return `Passed`, or the consumer applies a policy of
    its own to `publishedAt`.
@@ -486,10 +502,18 @@ A consumer accepts a capsule only after:
    auditors' authority over a round exists only inside
    `RoundHead_CreateRound`, so such a round came from the chain.
 
-A consumer that uses a capsule in a transaction with other parties
-performs checks 1 to 3 inside that transaction: every informee's
-participant re-executes them, so counterparties need not trust the
-consumer's reading.
+A consumer that uses a capsule in a transaction with other parties performs the
+authenticity, canonicality and freshness checks inside that transaction: every
+informee's participant re-executes them, so counterparties need not trust the
+consumer's reading of authenticity and freshness. Inside the transaction
+canonicality carries over only through the attestation: the `RoundView` is an
+argument the submitter supplies, and nothing inside the transaction ties it to
+a `Round` on the ledger, so a counterparty that re-executes
+`Verifier_VerifyRound` learns that the view and the capsule agree and, where
+the feed attests its rounds, that the key holder designated that content for
+that round number. Outside the transaction, a counterparty that reads the round
+compares the view with it before it consents; one that consented in advance, to
+a choice the other may exercise alone later, relies on the attestation.
 
 ### 6. The publisher's procedure
 
@@ -498,9 +522,26 @@ head. Every contract the transaction uses MUST be visible to the
 submitter's participant, whatever authority the choice carries; in the
 reference implementation these are the head, the canonical verifier and
 the root license, so publication is open to whoever sees all three, by
-observation or by explicit disclosure. A publisher that
-loses the race on the head gets a failed submission, nothing is created,
-and it retries on the new head.
+observation or by explicit disclosure. A publisher that loses the race on the
+head gets a failed submission, nothing is created, and it retries on the new
+head.
+
+Where the definition's verifier names attestation keys, the publisher passes an
+attestation with the content: signatures over the round about to be created,
+the head's `roundNumber` plus one and the verifier's commitment to `content`,
+in the verifier's encoding. The keys are the data producer's, not a
+publisher's: a publisher that does not hold one carries a signed candidate to
+the ledger. The key holder MUST sign one candidate per round number, retry a
+failed publication with the same candidate, and sign another for the same
+number only when no reference time exists at which both would pass the
+verifier's freshness check, so that two attested candidates for one round
+number are never fresh together. A submission that loses the race on the head
+at confirmation has shown the candidate to the informees' participants, which
+is harmless: the key holder retries the same candidate, so it is what the round
+will carry, unless publication keeps failing until the candidate is no longer
+fresh. A submission that fails at interpretation on the submitter's
+participant, on a head that participant already knows is consumed, a paused
+head or a stale fixing, shows nothing.
 
 ### 7. Conformance
 
@@ -528,6 +569,11 @@ and it retries on the new head.
   provable to a consumer from the interface alone.
 - **The operator learns who publishes and who holds licenses.** What it
   does not learn is consumption.
+- **An attestation is the key holder's word.** To a party that cannot read the
+  round it proves that the key holder designated the content for the round
+  number, against everyone but the key holder: two attested candidates for one
+  round number that are fresh together are the key holder's equivocation,
+  provable by anyone holding both, not something the ledger excludes.
 
 ### 9. Versioning
 
@@ -574,6 +620,23 @@ without receiving the data. The round is the canonical anchor every reader
 shares; the data goes only where it is licensed to go. The requirement that the
 commitment cover exactly what a distribution copies unchanged is what makes
 a redistributed capsule verify against the same round as the root.
+
+**An attestation in the round.** Re-execution carries authenticity and
+freshness to every party of a transaction, since both are functions of the
+capsule; it cannot carry canonicality, since the round view is the submitter's
+argument. Fetching the round would tie the view to the ledger, but the round's
+signatories confirm a fetch and learn of it, which puts the oracle's
+participants on the settlement path and lets its operator see who settles on
+which round. The standard instead lets the data producer sign the round number
+and the commitment, so that a party without the round checks, as data, that the
+producer designated that content for that number; the round's signatories are a
+fact of the ledger, not data a view carries. The producer signs one candidate
+per number, so that two fresh attestations of one number are its own
+equivocation, provable by anyone holding both, and the only thing the
+attestation does not exclude. Several authentic aggregates can exist for one
+fixing time, which is why a round, and the producer's choice among them, exist
+at all; a consumer that wants no such choice pins the oracle's full node set as
+its quorum, at the cost of liveness.
 
 **Lineage to the fixing, not to the path.** Every capsule is anchored to
 the round of its number: a consumer proves that the content is the one
@@ -667,23 +730,22 @@ the standard.
 
 ## Backwards compatibility
 
-The proposal adds new interfaces and changes nothing that exists. Contracts
-of oracles already deployed on Canton are unaffected; an oracle adopts CAPS
-by deploying a conforming set of contracts alongside its existing ones and
-a verifier for its scheme. Applications written against the Canton Data
-Standard's `PublishedDataPoint` read CAPS capsules without change, and gain
-the checks of section 5 when they adopt the `Capsule` and `Verifier`
-interfaces. A CIP-0056 asset registry, or any settlement contract, consumes
-a capsule through an ordinary contract read within the existing
-stakeholder model, and may run checks 1 to 3 inside its own transaction so
-that every informee's participant re-executes them; no new ledger
-primitive is involved, and a wallet or dApp reaches the contracts through
-the dApp API (CIP-0103) as it reaches any other. An oracle's off-chain
-signing is
-unchanged: the RedStone verifier consumes the payloads RedStone's nodes
-already sign, and the Data Standard verifier the envelope that standard
-defines. Later versions of the standard are new interface packages
-(section 9), adopted by implementing both during a transition.
+The proposal adds new interfaces and changes nothing that exists. Contracts of
+oracles already deployed on Canton are unaffected; an oracle adopts CAPS by
+deploying a conforming set of contracts alongside its existing ones and a
+verifier for its scheme. Applications written against the Canton Data
+Standard's `PublishedDataPoint` read CAPS capsules without change, and gain the
+checks of section 5 when they adopt the `Capsule` and `Verifier` interfaces. A
+CIP-0056 asset registry, or any settlement contract, consumes a capsule through
+an ordinary contract read within the existing stakeholder model, and may run
+the authenticity, canonicality and freshness checks inside its own transaction
+so that every informee's participant re-executes them; no new ledger primitive
+is involved, and a wallet or dApp reaches the contracts through the dApp API
+(CIP-0103) as it reaches any other. An oracle's off-chain signing is unchanged:
+the RedStone verifier consumes the payloads RedStone's nodes already sign, and
+the Data Standard verifier the envelope that standard defines. Later versions
+of the standard are new interface packages (section 9), adopted by implementing
+both during a transition.
 
 ## Reference implementation
 
@@ -720,5 +782,8 @@ licensed under Apache-2.0.
 ## Changelog
 
 - 2026-10-23: initial draft.
+- 2026-11-03: round attestation, in the round view, the publisher's procedure
+  and the canonicality check; section 5 on what a multi-party transaction
+  carries; sections 6 and 8 and the rationale on the attestation.
 
 [repo]: https://github.com/redstone-finance/canton-access-privacy-standard-public
