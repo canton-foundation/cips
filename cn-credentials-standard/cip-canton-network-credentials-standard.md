@@ -200,7 +200,7 @@ The specifications of the `Credential` and `CredentialFactory` Daml interfaces a
 ##### Expected App Usage of Daml APIs
 
 We expect applications that need to fetch credentials as part of their Daml workflows to use `Credential_Get`.
-We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. This covers the credentials from all credential registries at once, see [Listing Credentials via the Ledger API](#listing-credentials-via-the-ledger-api). Wallets can let the user archive an unwanted credential using the `Credential_Revoke` choice, provided the credential's `revokableBy` field contains a group consisting only of the user's party. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
+We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. This covers the credentials from all credential registries at once, see [Listing Credentials via the Ledger API](#listing-credentials-via-the-ledger-api). Wallets can let the user revoke an unwanted credential using the `Credential_Revoke` choice, provided the credential's `revokableBy` field contains a group consisting only of the user's party. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
 
 Note that apps and users that want to use credentials from a specific registry in their Daml workflows must vet the DAR files of that credential registry.
 
@@ -259,7 +259,7 @@ The purpose of the bulk credential retrieval API is to enable network explorers 
 The corresponding HTTP endpoints work by exposing the list of synchronizers which are used by the registry to store credentials, and then serving pages of create and archive events per synchronizer in ascending record time order, with contract id ascending as the tie-break. A reassignment of a credential contract to a different synchronizer is served as an archive event on the source synchronizer and a create event on the target synchronizer. A registry MAY prune the events of archived records once they are older than its retention window, which it advertises via the [Credential Registry Info API](#credential-registry-info-api).
 An explorer that falls further behind than that window starts over and receives the current records without their pruned history.
 
-Registries SHOULD support a minimal retention window of 7 days to ensure that explorers can reliably ingest all credential events.
+Registries SHOULD support a minimum retention window of 7 days to ensure that explorers can reliably ingest all credential events.
 
 The API is specified in [splice-api-credential-registry-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-v1.yaml).
 
@@ -280,7 +280,7 @@ Instead, the registry expires the records at the end of a free period of 90 days
 so that the traffic cost of creating and renewing them covers their storage cost.
 This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer and holder can either
 jointly renew it without burning CC by re-creating it via the `CredentialFactory`, which results in a new `createdAt`,
-or its issuer or holder can extend it by burning CC as described in [Extended Expiration Durations](#extended-expiration-durations).
+or its issuer or holder can extend it on their own, optionally by burning CC, as described in [Extended Expiration Durations](#extended-expiration-durations).
 
 #### Extended Expiration Durations
 
@@ -363,7 +363,7 @@ Multiple URLs are supported for decentralized registries, so that clients can im
 
 This CIP defines the property `cip-tbd/credential-issuer-app-url`.
 
-It serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party (issuer = holder = `issuer`) in the Canton Credential Registry, with the claim's subject unset. The idea is that the users' wallets read the user's credentials from their node, and then query the Canton Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. Such redirects may add a `credential-cid=<contract-id>` query parameter to the URL to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
+It serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party (issuer = holder = `issuer`) in the Canton Credential Registry, with the claim's subject unset. The idea is that the user's wallets read the user's credentials from their node, and then query the Canton Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. Such redirects may add a `credential-cid=<contract-id>` query parameter to the URL to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
 
 #### Discovering CIP-0056 Registries
 
@@ -397,7 +397,7 @@ We also expect this application discovery problem to appear for other types of a
 This CIP solves application and service discovery on the Canton Network.
 
 Furthermore, this CIP provides a foundation for publishing and discovering metadata about parties on the Canton Network,
-which apps can use to improve how they display actors and counter-parties,
+which apps can use to improve how they display actors and counterparties,
 e.g., using [party profiles as proposed in this CIP](https://github.com/canton-foundation/cips/pull/169).
 
 ## Rationale
@@ -412,7 +412,7 @@ Private credentials are left to a future CIP. The `Credential_Get` choice alread
 
 Wallets list their own user's credentials through the Ledger API of the user's validator node, and use the read-only HTTP APIs to look up credentials of other parties, for example for discovery.
 The validator node sees the user's credentials from all credential registries at once, whereas with the HTTP APIs a wallet would have to query every registry in the network, as it cannot know which of them store credentials of its user.
-This also carries over to private credentials, as the Ledger API only shows users the contracts they are a stakeholder of.
+This also carries over to private credentials, as the Ledger API only shows users the contracts they are a stakeholders of.
 
 ### Relationship to W3C Verifiable Credentials
 
@@ -436,7 +436,7 @@ Instead, credential records carry on-ledger authorization: they are created with
 and the ledger guarantees their integrity.
 
 Beyond that, the trust in a credential comes from the reputation and verification processes of the issuing party
-and the registry storing them.
+and the registry storing it.
 This greatly lowers the technical complexity and mirrors the trust model taken for token registries,
 whose `admin` party is trusted to manage the registry and its entries.
 Where required, decentralized parties and governance can be used to enhance trust and reduce reliance on a single entity,
@@ -495,7 +495,7 @@ The Canton Credential Registry is expected to be implemented as follows:
 1. The Splice Daml code is changed so that there is:
    1. A template that implements the `Credential` interface and serves to record credentials in the registry.
    2. An implementation of the `CredentialFactory`, so that issuers and holders can jointly publish credentials to the registry.
-   3. A modified Token Standard `TransferFactory` implementation that supports burning CC for [paid extensions](#extended-expiration-durations).
+   3. A Token Standard `TransferFactory` implementation on the registry that supports [extending the expiration](#extended-expiration-durations) of credentials, optionally by burning CC.
 2. The Scan app backend running on SV nodes implements the read-only HTTP APIs and the HTTP API of the `CredentialFactory`,
    so that any Scan app can be used to interact with the Canton Credential Registry.
    The Scan app internally builds an index over all credentials in its backing Postgres DB. A single multi-column index is sufficient,
