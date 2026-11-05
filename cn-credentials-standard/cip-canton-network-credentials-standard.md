@@ -4,32 +4,13 @@
   Layer: Daml
   Title: Canton Network Credentials Standard
   Author:
-    PixelPlex, Simon Meier
+    Uladzislaŭ Kokosh, Uladzislaŭ Dzemidovich, Eugene Birski (PixelPlex)
+    Simon Meier
   License: CC0-1.0
   Status: Draft
   Type: Standards Track
   Created: 2026-11-03
 </pre>
-
-FIXME:
-- diagram: show the two modification APIs as optional APIs with dashed arrows
-  - also explain solids and dashed arrows in text
-- code:
-  - adjust reference implementation to match code shown in here
-  - adjust the OpenAPI spec of the [Credential Lookup API](#credential-lookup-api) to add the `effectiveOnly` flag
-  - split the HTTP API definitions into the read-only HTTP API and the factory HTTP API, which is optional
-    - preferred option: in splice repo
-      - `/credential-standard/splice-api-credential-registry-v1.yaml` (read-only)
-      - `/credential-standard/splice-api-credential-registry-update-v1.yaml` (modification)
-    - then update all OpenAPI links in this CIP, which currently all point to the single `openapi/credential-registry-v1.yaml`
-    - add the missing spec link for the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api)
-      (note though that bulk retrieval is part of read-only API)
-    - add the spec link for the factory context endpoint in [Credential Factory Interface](#credential-factory-interface)
-  - move the Splice Credential Registry implementation out of ANS into a separate package/module
-    - preferred option move it into `splice-amulet`, we we can also use Credentials for splice-amulet related
-      functionality should we ever want to do so
-      - ==> move the code into `Splice.Credentials` within the `splice-amulet` package/module
-
 
 ## Abstract
 
@@ -41,9 +22,9 @@ and use these to solve application discovery, asset discovery, and party metadat
 The specification of this CIP consists of three parts:
 
 1. **Credential Registry APIs**: defines standard APIs for storing, retrieving, and using Canton Network credentials.
-2. **Splice Credential Registry**: specifies how these APIs are implemented in a decentralized registry run by the SV nodes as part of the Global Synchronizer. This registry serves as the base registry from which application discovery can start.
+2. **Canton Credential Registry**: specifies how these APIs are implemented in a decentralized registry run by the SV nodes as part of the Global Synchronizer. This registry serves as the base registry from which application discovery can start.
 3. **Standardized Application and Metadata Discovery**:
-   specifies how these APIs and the Splice Credential Registry are used to standardize the discovery of specific
+   specifies how these APIs and the Canton Credential Registry are used to standardize the discovery of specific
    kinds of applications on the network and their metadata
    such as the off-ledger APIs of [CIP-0056 asset registries](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 
@@ -61,7 +42,7 @@ This standard is concerned with entities and apps acting in the following roles:
 - **app providers**: entities that operate apps that retrieve and use credentials in their UIs and/or in their on-ledger workflows
 - **app users**: entities that use apps that use credentials
 
-Entities often act in multiple roles. For example, a [CIP-0056 token administrator that self-publishes their off-ledger token registry URLs](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access) to the Splice Credential Registry acts both as the credential issuer and the credential holder of the corresponding credential. The claim in the credential associates the property `splice.lfdecentralizedtrust.org/registry-urls` to the actual URLs. Token Standard wallets are typical apps using credentials with that kind of property. They use them to resolve the admin party-ids encountered in tokens held by a wallet user to the [URLs to query to execute transfers and other actions](../cip-0056/cip-0056.md#utxo-access-management).
+Entities often act in multiple roles. For example, a [CIP-0056 token administrator that self-publishes their off-ledger token registry URLs](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access) to the Canton Credential Registry acts both as the credential issuer and the credential holder of the corresponding credential. The claim in the credential associates the property `splice.lfdecentralizedtrust.org/registry-urls` to the actual URLs. Token Standard wallets are typical apps using credentials with that kind of property. They use them to resolve the admin party-ids encountered in tokens held by a wallet user to the [URLs to query to execute transfers and other actions](../cip-0056/cip-0056.md#utxo-access-management).
 
 The following diagram shows how the APIs defined in this CIP mediate the interaction between the apps in the different roles. Arrows point from clients to servers of APIs.
 
@@ -69,12 +50,14 @@ The following diagram shows how the APIs defined in this CIP mediate the interac
 
 As we can see, the APIs cover the interaction between the different kinds of apps and credential registries.
 Standardized APIs are shown in blue and custom APIs are shown in black.
+Dashed arrows show optional APIs: the `CredentialFactory` API and the revocation of credentials by their holder.
+The green labels name the parties that represent the respective apps or entities on-ledger.
 Credential holders use custom APIs and UIs to interact with credential issuers. App providers can use explorer-specific APIs for richer lookups, see [Rich Credential Lookup](#rich-credential-lookup). App users are not shown in the diagram as they do not directly interact with any of the APIs standardized in this CIP. They rely on the app provider making suitable choices with respect to how to use the standardized APIs to make use of credentials in the apps' UIs and on-ledger workflows.
 
 The diagram does not show the [Credential Registry Info API](#credential-registry-info-api), which is used for extensibility. It allows apps interacting with the registry to figure out what standards the registry supports and what limits it enforces.
 
 Note that there can be many credential registries in the network.
-One of them is the [Splice Credential Registry](#splice-credential-registry),
+One of them is the [Canton Credential Registry](#canton-credential-registry),
 which serves as a base credential registry for the network.
 It is for example used to [discover the other credential registries in the network](#standardized-application-and-metadata-discovery).
 
@@ -97,11 +80,13 @@ Concretely, it is defined by the following Daml code copied from the [reference 
 ```haskell
 -- | A claim that is part of a credential.
 data Claim = Claim with
-    subject : Text
+    subject : Optional Text
       -- ^ The subject of the claim.
       --
-      -- Often set to the textual representation of the holder party-id of the credential,
-      -- which is the most common subject.
+      -- If not set, the claim pertains to the holder of the credential.
+      -- Registries MUST reject a set subject that is empty
+      -- or equal to `partyToText holder`.
+      -- A set subject is not required to be a party id.
       --
       -- Subjects MUST only contain characters from [a-zA-Z0-9 ._:/-].
       -- Note that the space character is allowed as it is allowed in party names in Daml.
@@ -198,11 +183,11 @@ data Credential_RevokeResult = Credential_RevokeResult with
   deriving (Eq, Show)
 ```
 
-Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [Splice Credential Registry Limits](#splice-credential-registry-limits) for the concrete limits enforced by the Splice Credential Registry.
+Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [Canton Credential Registry Limits](#canton-credential-registry-limits) for the concrete limits enforced by the Canton Credential Registry.
 
 ##### Credential Factory Interface
 
-The purpose of this API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Splice Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
+The purpose of this API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
 
 Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
@@ -210,15 +195,15 @@ This API uses the factory pattern pioneered in [CIP-0056](../cip-0056/cip-0056.m
 
 The specifications of the `Credential` and `CredentialFactory` Daml interfaces and of the HTTP API endpoint can be found here:
 
-- [Splice/Api/Credential/RegistryV1.daml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-808147bf36f1c087a42b92d67d2021c2ca203076cc0e3b6a31f2ccc60497a34d) (includes the data format of credentials)
-- [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835)
+- [Splice/Api/Credential/RegistryV1.daml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/daml/splice-api-credential-registry-v1/daml/Splice/Api/Credential/RegistryV1.daml) (includes the data format of credentials)
+- [splice-api-credential-registry-update-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-update-v1.yaml)
 
 ##### Expected App Usage of Daml APIs
 
 We expect applications that need to fetch credentials as part of their Daml workflows to use `Credential_Get`.
-We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. Wallets can let the user archive an unwanted credential using the `Credential_Revoke` choice, provided the credential's `revokableBy` field contains a group consisting only of the user's party. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
+We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. This covers the credentials from all credential registries at once, see [Listing Credentials via the Ledger API](#listing-credentials-via-the-ledger-api). Wallets can let the user archive an unwanted credential using the `Credential_Revoke` choice, provided the credential's `revokableBy` field contains a group consisting only of the user's party. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
 
-Note that apps and users that want to use credentials from a specific registry on-ledger must vet the DAR files of that credential registry.
+Note that apps and users that want to use credentials from a specific registry in their Daml workflows must vet the DAR files of that credential registry.
 
 #### Read-Only HTTP APIs
 
@@ -231,7 +216,7 @@ The purpose of the credential registry info API is twofold:
 1. It enables an asynchronous rollout of newer versions of the credential registry APIs.
 2. It informs clients about constraints of the registry (e.g., limits on the number of claims or results).
 
-The API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
+The API is specified in [splice-api-credential-registry-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-v1.yaml).
 
 ##### Credential Lookup API
 
@@ -243,9 +228,10 @@ The credential lookup API serves queries of the form `(property, issuer?, holder
 It also supports a boolean flag `effectiveOnly` to return only records whose validity period is effective at the time the query is served.
 
 The API returns the credential records with matching `issuer` and `holder` that contain a claim with matching `property` and `subject`.
+A `subject` equal to the `holder` also matches claims without a subject, as those pertain to the holder.
 This is all that is needed for the lookups in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery), and it keeps the indexing overhead for credential registries small. Richer queries are left to network explorers, see [Rich Credential Lookup](#rich-credential-lookup).
 
-The API is specified in [openapi/credential-registry-v1.yaml](https://github.com/hyperledger-labs/splice/pull/3416/changes#diff-a73145dfdb26770f01b5fc0a9f35c7c34f067584acb6ec16de7e82040df6f835).
+The API is specified in [splice-api-credential-registry-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-v1.yaml).
 By default the API only returns the `CredentialView` of a credential. It optionally also includes the underlying contract so that it can be disclosed for usage in a Daml transaction that reads the credential.
 
 ###### Handling Duplicates
@@ -276,12 +262,14 @@ An explorer that falls further behind than that window starts over and receives 
 
 Registries SHOULD support a minimal retention window of 7 days to ensure that explorers can reliably ingest all credential events.
 
+The API is specified in [splice-api-credential-registry-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-v1.yaml).
+
 ##### Rich Credential Lookup
 
 Network explorers MAY offer richer lookups than the standardized [Credential Lookup API](#credential-lookup-api), for example by property prefix, by several issuers, or by subject alone.
-They ingest credentials through the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) and build their own indexes. This CIP does not standardize such lookups, and the Splice Credential Registry does not serve them.
+They ingest credentials through the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) and build their own indexes. This CIP does not standardize such lookups, and the Canton Credential Registry does not serve them.
 
-### Splice Credential Registry
+### Canton Credential Registry
 
 Splice adds a decentralized base credential registry that is run by the SV nodes as part of the Global Synchronizer.
 Its admin party is the `dso` party, and it implements all the APIs defined above, including the optional `CredentialFactory` API.
@@ -307,7 +295,7 @@ They do so by initiating a Token Standard transfer where:
 - `sender` is equal to the `issuer` or `holder` of the credential to extend
 - `amount` is equal to the amount of CC to burn
 - `receiver` is equal to the party `cip-tbd_credential-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
-- `memo` is equal to `cip-tbd/memo:request=extend-credential-expiry`
+- `meta["splice.lfdecentralizedtrust.org/reason"]` (shown as the memo by wallets) is equal to `cip-tbd/memo:request=extend-credential-expiry`
 - `extraArgs.context` stores the contract-id of the credential to be extended in `cip-tbd/credential-cid` as an `AV_ContractId`
 
 Note that setting the contract-id in `extraArgs.context` requires wallet apps to support this feature explicitly.
@@ -326,13 +314,13 @@ so that no CC is burned without effect.
 
 A paid extension also adds the free period, as that is de facto covered by the traffic paid for the extension transaction.
 
-#### Splice Credential Registry Limits
+#### Canton Credential Registry Limits
 
-The Splice Credential Registry rejects records that are too large to index and serve from Scan.
+The Canton Credential Registry rejects records that are too large to index and serve from Scan.
 It does not validate claim content.
 Content checks are application-specific and would bind the registry to particular use cases.
 
-A credential record is accepted by the Splice Credential Registry only if all of the following hold:
+A credential record is accepted by the Canton Credential Registry only if all of the following hold:
 
 - it contains at most 32 claims.
 - its claims are unique per `(subject, property)` pair.
@@ -341,16 +329,16 @@ A credential record is accepted by the Splice Credential Registry only if all of
 - if both are set, `validUntil` is later than `validFrom`; and if set, `validUntil` is later than `createdAt`.
   Note that `validFrom` may be earlier than `createdAt`, so that credentials can be registered even within their validity period.
 
-The registry sets the initial `expiresAt` to `createdAt` plus the free period, capped at `validUntil` if that is set.
+The registry sets `createdAt` to the `requestedAt` argument of `CredentialFactory_UpdateCredentials`, and the initial `expiresAt` to `createdAt` plus the free period, capped at `validUntil` if that is set.
 
 The size limits are advertised via the [Credential Registry Info API](#credential-registry-info-api). Other registries MAY choose different limits.
 
 
 ### Standardized Application and Metadata Discovery
 
-Together the APIs defined in this CIP and the Splice Credential Registry enable
+Together the APIs defined in this CIP and the Canton Credential Registry enable
 defining standard ways to discover applications and metadata about them.
-It works by applications using self-published credentials in the Splice Credential Registry to advertise their capabilities and metadata, which can then be discovered by apps by querying the registry.
+It works by applications using self-published credentials in the Canton Credential Registry to advertise their capabilities and metadata, which can then be discovered by apps by querying the registry.
 Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X, X)`.
 
 The concrete claims to use in these credentials are usually defined in CIPs.
@@ -367,37 +355,36 @@ We expect future CIPs to define additional well-known properties for discovering
 This CIP defines the property `cip-tbd/credential-registry-urls`.
 
 It serves to discover the off-ledger credential registry API of a specific credential registry admin party `registryAdmin`.
-It is published by `registryAdmin` using a self-published credential (issuer = holder = `registryAdmin`) in the Splice Credential Registry,
-whose claim subject is the textual representation of `registryAdmin`'s party-id.
-It specifies a comma-separated list of URL prefixes for party `registryAdmin`. Clients append the paths of the credential registry OpenAPI to them, as for the CIP-0056 registry URLs.
+It is published by `registryAdmin` using a self-published credential (issuer = holder = `registryAdmin`) in the Canton Credential Registry, with the claim's subject unset.
+It specifies a comma-separated list of URL prefixes for party `registryAdmin`. Clients append the paths of the credential registry OpenAPI specs to them, as for the CIP-0056 registry URLs.
 Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
 
 #### Discovering Credential Issuer Applications
 
 This CIP defines the property `cip-tbd/credential-issuer-app-url`.
 
-It serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party (issuer = holder = `issuer`) in the Splice Credential Registry, with the claim subject being the textual representation of `issuer`'s party-id. The idea is that the users' wallets read the user's credentials from their node, and then query the Splice Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. Such redirects may add a `credential-cid=<contract-id>` query parameter to the URL to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
+It serves to discover the [CIP-0103 dApp](../cip-0103/cip-0103.md) of a specific credential issuer party `issuer`. It is self-published by the `issuer` party (issuer = holder = `issuer`) in the Canton Credential Registry, with the claim's subject unset. The idea is that the users' wallets read the user's credentials from their node, and then query the Canton Credential Registry using `cip-tbd/credential-issuer-app-url` to discover the URL for the issuer-specific dApp to manage the user's credentials. We expect the wallet UI to offer a redirect to that dApp. Such redirects may add a `credential-cid=<contract-id>` query parameter to the URL to focus on a particular credential. Whether to offer such a UI is optional for credential issuers.
 
 #### Discovering CIP-0056 Registries
 
 The property `splice.lfdecentralizedtrust.org/registry-urls` is already defined in [CIP-0056](../cip-0056/cip-0056.md).
 
-Token registries publish it in a self-published credential (issuer = holder = subject = registry admin) in the Splice Credential Registry.
+Token registries publish it in a self-published credential (issuer = holder = registry admin, subject unset) in the Canton Credential Registry.
 This enables wallets and apps to automatically discover the off-ledger API URLs of token registries as [outlined in CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
 It replaces the CNS-based lookup described there.
 
-#### Discovering the Splice Credential Registry and Canton Coin Token Registry
+#### Discovering the Canton Credential Registry and Canton Coin Token Registry
 
-The above properties will be used to make the Splice Credential Registry and the Canton Coin Token Registry discoverable by making the `dso` party publish a credential in the Splice Credential Registry with issuer = holder = admin = `dso` and claims
+The above properties will be used to make the Canton Credential Registry and the Canton Coin Token Registry discoverable by making the `dso` party publish a credential in the Canton Credential Registry with issuer = holder = admin = `dso` and claims
 
 | Subject | Property | Value |
 | --- | --- | --- |
-| `dso` | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |
-| `dso` | `splice.lfdecentralizedtrust.org/registry-urls` | `<scan-url1>,...,<scan-urlN>` |
+| unset | `cip-tbd/credential-registry-urls` | `<scan-url1>,...,<scan-urlN>` |
+| unset | `splice.lfdecentralizedtrust.org/registry-urls` | `<scan-url1>,...,<scan-urlN>` |
 
 The Scan URLs are the ones published per network here: [https://canton.foundation/sv-network-status/](https://canton.foundation/sv-network-status/).
-These URLs, or the Scan proxy of a validator node, serve as the bootstrap for discovery: clients use them to query the Splice Credential Registry.
-The `dso` credential above serves to make the Splice Credential Registry discoverable in the same way as any other credential registry.
+These URLs, or the Scan proxy of a validator node, serve as the bootstrap for discovery: clients use them to query the Canton Credential Registry.
+The `dso` credential above serves to make the Canton Credential Registry discoverable in the same way as any other credential registry.
 The SV app takes care of creating and updating this credential as the Scan URLs change over time.
 
 ## Motivation
@@ -420,6 +407,12 @@ e.g., using [party profiles as proposed in this CIP](https://github.com/canton-f
 This CIP covers only credentials that can be discovered publicly, as that is all that is required for its motivating use cases: application and metadata discovery. Public credentials also enable explorers to index the network, which is what the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) is built for.
 
 Private credentials are left to a future CIP. The `Credential_Get` choice already allows registries to restrict who can fetch a non-public credential, so that such a CIP can build on the interfaces defined here. Standardizing access control for credentials published to a registry is a non-trivial effort, and is easiest where the credential issuer and the registry are run by the same entity, so that the registry can enforce issuer-specific access rules.
+
+### Listing Credentials via the Ledger API
+
+Wallets list their own user's credentials through the Ledger API of the user's validator node, and use the read-only HTTP APIs to look up credentials of other parties, for example for discovery.
+The validator node sees the user's credentials from all credential registries at once, whereas with the HTTP APIs a wallet would have to query every registry in the network, as it cannot know which of them store credentials of its user.
+This also carries over to private credentials, as the Ledger API only shows users the contracts they are a stakeholder of.
 
 ### Relationship to W3C Verifiable Credentials
 
@@ -447,7 +440,7 @@ and the registry storing them.
 This greatly lowers the technical complexity and mirrors the trust model taken for token registries,
 whose `admin` party is trusted to manage the registry and its entries.
 Where required, decentralized parties and governance can be used to enhance trust and reduce reliance on a single entity,
-as done for example for the Splice Credential Registry.
+as done for example for the Canton Credential Registry.
 
 ### No Standardized Credential Verification
 
@@ -495,16 +488,16 @@ This CIP is backwards compatible: it only adds functionality.
 
 ## Reference Implementation
 
-The HTTP and Daml APIs and the Daml code for the Splice Credential Registry are available at [this Splice PR](https://github.com/hyperledger-labs/splice/pull/3416).
+The HTTP and Daml APIs and the Daml code for the Canton Credential Registry are available on [this Splice branch](https://github.com/canton-network/splice/tree/meiersi/std/credential-registry).
 
-The Splice Credential Registry is expected to be implemented as follows:
+The Canton Credential Registry is expected to be implemented as follows:
 
 1. The Splice Daml code is changed so that there is:
    1. A template that implements the `Credential` interface and serves to record credentials in the registry.
    2. An implementation of the `CredentialFactory`, so that issuers and holders can jointly publish credentials to the registry.
    3. A modified Token Standard `TransferFactory` implementation that supports burning CC for [paid extensions](#extended-expiration-durations).
 2. The Scan app backend running on SV nodes implements the read-only HTTP APIs and the HTTP API of the `CredentialFactory`,
-   so that any Scan app can be used to interact with the Splice Credential Registry.
+   so that any Scan app can be used to interact with the Canton Credential Registry.
    The Scan app internally builds an index over all credentials in its backing Postgres DB. A single multi-column index is sufficient,
    as the lookup API only supports one query pattern.
 3. The Scan app proxy served by the validator app implements the same HTTP APIs, calling out to multiple Scan apps and comparing the results to implement BFT reads.
