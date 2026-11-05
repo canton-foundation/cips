@@ -1,6 +1,5 @@
 <pre>
   CIP: TBD
-    Note: all `cip-tbd` identifiers in this document are placeholders and should be replaced with the actual CIP number once assigned.
   Layer: Daml
   Title: Canton Network Credentials Standard
   Author:
