@@ -295,7 +295,7 @@ They do so by initiating a Token Standard transfer where:
 - `sender` is equal to the `issuer` or `holder` of the credential to extend
 - `amount` is equal to the amount of CC to burn
 - `receiver` is equal to the party `cip-tbd_credential-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
-- `meta["splice.lfdecentralizedtrust.org/reason"]` (shown as the memo by wallets) is equal to `cip-tbd/memo:request=extend-credential-expiry`
+- `memo` is equal to `cip-tbd/memo:request=extend-credential-expiry`, where `memo` is the value of the `splice.lfdecentralizedtrust.org/reason` key in the transfer's `meta`, which wallets show as the memo
 - `extraArgs.context` stores the contract-id of the credential to be extended in `cip-tbd/credential-cid` as an `AV_ContractId`
 
 Note that setting the contract-id in `extraArgs.context` requires wallet apps to support this feature explicitly.
@@ -313,6 +313,7 @@ The registry rejects extension requests where `newExpiresAt` is not later than t
 so that no CC is burned without effect.
 
 A paid extension also adds the free period, as that is de facto covered by the traffic paid for the extension transaction.
+An extension that burns no CC adds only the free period. Like re-publishing through the `CredentialFactory`, it is free, but it needs only the issuer or the holder, not both.
 
 #### Canton Credential Registry Limits
 
