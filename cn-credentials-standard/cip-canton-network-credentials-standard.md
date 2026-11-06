@@ -4,7 +4,7 @@
   Title: Canton Network Credentials Standard
   Author:
     Uladzislaŭ Kokosh, Uladzislaŭ Dzemidovich, Eugene Birski (PixelPlex)
-    Simon Meier
+    Simon Meier (Digital Asset)
   License: CC0-1.0
   Status: Draft
   Type: Standards Track
@@ -49,7 +49,7 @@ The following diagram shows how the APIs defined in this CIP mediate the interac
 
 As we can see, the APIs cover the interaction between the different kinds of apps and credential registries.
 Standardized APIs are shown in blue and custom APIs are shown in black.
-Dashed arrows show optional APIs: the `CredentialFactory` API and the revocation of credentials by their holder.
+Solid arrows show mandatory APIs while dashed arrows show optional APIs.
 The green labels name the parties that represent the respective apps or entities on-ledger.
 Credential holders use custom APIs and UIs to interact with credential issuers. App providers can use explorer-specific APIs for richer lookups, see [Rich Credential Lookup](#rich-credential-lookup). App users are not shown in the diagram as they do not directly interact with any of the APIs standardized in this CIP. They rely on the app provider making suitable choices with respect to how to use the standardized APIs to make use of credentials in the apps' UIs and on-ledger workflows.
 
@@ -82,12 +82,14 @@ data Claim = Claim with
     subject : Optional Text
       -- ^ The subject of the claim.
       --
-      -- If not set, the claim pertains to the holder of the credential.
-      -- Registries MUST reject a set subject that is empty
-      -- or equal to `partyToText holder`.
-      -- A set subject is not required to be a party id.
+      -- If not set, the holder is the subject of the claim.
+      -- If set, then the claim pertains to the specified subject.
       --
-      -- Subjects MUST only contain characters from [a-zA-Z0-9 ._:/-].
+      -- Registries MUST enforce that, when the subject is set it:
+      --   - is not the empty string `""`
+      --   - is not equal to `partyToText holder`
+      --   - it only contains characters from [a-zA-Z0-9 ._:/-]
+      --
       -- Note that the space character is allowed as it is allowed in party names in Daml.
     property : Text
       -- ^ The property of the claim.
@@ -294,10 +296,12 @@ They do so by initiating a Token Standard transfer where:
 - `sender` is equal to the `issuer` or `holder` of the credential to extend
 - `amount` is equal to the amount of CC to burn
 - `receiver` is equal to the party `cip-tbd_credential-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
-- `memo` is equal to `cip-tbd/memo:request=extend-credential-expiry`, where `memo` is the value of the `splice.lfdecentralizedtrust.org/reason` key in the transfer's `meta`, which wallets show as the memo
+- `memo` is equal to `cip-tbd/memo:request=extend-credential-expiry`
 - `extraArgs.context` stores the contract-id of the credential to be extended in `cip-tbd/credential-cid` as an `AV_ContractId`
 
 Note that setting the contract-id in `extraArgs.context` requires wallet apps to support this feature explicitly.
+With `memo` we refer to the value of the `splice.lfdecentralizedtrust.org/reason` key in the transfer's `meta`,
+which wallets typically show as a "memo" or "Description" field.
 
 The new expiry time is computed as follows:
 
@@ -411,8 +415,11 @@ Private credentials are left to a future CIP. The `Credential_Get` choice alread
 ### Listing Credentials via the Ledger API
 
 Wallets list their own user's credentials through the Ledger API of the user's validator node, and use the read-only HTTP APIs to look up credentials of other parties, for example for discovery.
-The validator node sees the user's credentials from all credential registries at once, whereas with the HTTP APIs a wallet would have to query every registry in the network, as it cannot know which of them store credentials of its user.
-This also carries over to private credentials, as the Ledger API only shows users the contracts they are a stakeholders of.
+Looking up the user's credentials via the Ledger API has two advantages:
+
+1. It also works for private credentials, which are not publicly discoverable through the HTTP APIs.
+2. It provides a unified view of all credentials of the user, regardless of which registry they are stored in.
+
 
 ### Relationship to W3C Verifiable Credentials
 
