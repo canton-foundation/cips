@@ -1,6 +1,33 @@
-
 # cips
+
 Global Synchronizer CIPs
+
+## Tokenomics
+
+Early tokenomics CIPs (cip-0001–0003, cip-0020, cip-0024) set the original reward/tranche structure for SVs and validators bringing in apps or validators. Later changes include:
+
+- **cip-0078** "Canton Coin Fee Removal" and **cip-0047** "Featured App Activity Markers" — removed/restructured CC transfer fees and app-activity accounting.
+- **cip-0098** — capped per-transaction application rewards at $1.50.
+- **cip-0104** "Traffic-Based App Rewards" and **cip-0120** "Traffic-Based Validator Rewards" — shift the reward basis toward synchronizer traffic.
+- **cip-0116** "Featured App Staking" and **cip-0119** "Free CC Transfer-Preapproval Base Duration" — recent tokenomics refinements.
+- **cip-0073** "Weighted Validator Liveness Rewards" and **cip-0096** "Removing Liveness Rewards from Validator Rewards Pool" — liveness rewards added, then partly rolled back.
+- **cip-0105** "SV Locking & Long-Term Commitment Framework" — ties SV weight to locked CC commitments (the trigger cip-0111's weight-reduction process references).
+- **cip-0082** "Establish a 5% Development Fund" and **cip-0100** "Governance of the CIP-0082 Development Fund" — a 5% pro-rata share of future CC mint emissions routed to a Foundation-governed fund, with its spend process run by the CF Tech & Ops Committee.
+
+## Governance
+
+Several CIPs define the governance mechanics:
+
+- **cip-0021** — created the Featured Application and Validator Committee (FAV-C), an SV subgroup that vets and votes on Featured Application designations.
+- **cip-0045** — "SV Operating Requirements": any SV with reward weight above 2.5 must run its own SV node within 6 months instead of relying on the GSF multitenant node, or face forced reduction of its weight to 1.
+- **cip-0111** — the formal process for reducing an SV's weight, partial or to zero, covering "Ghost SV" milestone failures, inactivity, and SV-locking violations (see cip-0105 under Tokenomics). Routes through the Tokenomics Working Group / Accountability Committee, an off-chain ratification vote, then an onchain "Update SV Reward Weight" vote.
+- **cip-0050** — withdrawn proposal on gating validator growth through trusted operators.
+
+## Token Standards
+
+- **cip-0056** "Canton Network Token Standard" — the foundational token interoperability standard. Defines six Daml/HTTP API pairs (token metadata, holdings, transfer instruction, allocation, allocation request, allocation instruction) so any wallet or app can interoperate with any registry or asset without asset-specific code. Supports Free-of-Payment (FOP) transfers and Delivery-vs-Payment (DVP) atomic settlement via time-boxed allocations.
+- **cip-0112** "Canton Network Token Standard V2" — a backward-compatible evolution of cip-0056 for TradFi/DeFi convergence: privacy-preserving batch settlement, an `Account` type replacing bare `Party` (supports custodian/provider multi-tier holding chains), configurable multi-party executors, committed allocations enabling iterated settlement, and a new `EventLog` interface for transaction-history parsing.
+- **cip-0103** "dApp Standard", **cip-0107** "24h Submission Delay for End-User CC Transactions", **cip-0117** "Logical Synchronizers", **cip-0064** "Delegateless Automation", **cip-0068** "Bootstrap network from non-zero round", **cip-0062**/**cip-0089** (Synchronizer Migrations) — other Standards Track / protocol-infrastructure CIPs.
 
 | Number| Layer | Title| Author| Type| Status|
 |--------------------------------|-------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------|-------------------|------------|
