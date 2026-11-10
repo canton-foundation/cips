@@ -122,5 +122,6 @@ Global Synchronizer CIPs
 | [cip-0126](/cip-0126/cip-0126.md) |  | Marex Super Validator Weight 10 | Christiana Chong | Governance | Approved |
 | [cip-0127](/cip-0127/cip-0127.md) |  | On-Chain Enforcement of FA and SV Locking | Jonathan D.K. Gibbons, Simon Meier  | Tokenomics | Approved |
 | [cip-0129](/cip-0129/cip-0129.md) |  | Universal Burn and Synchronizer Pricing | Yiannis Varelas, Shaul Kfir | Tokenomics | Approved |
+| [cip-0130](/cip-0130/cip-0130.md) |  | Nomura Super Validator Weight 10 | Eric Saraniecki | Governance | Proposed |
 
 
