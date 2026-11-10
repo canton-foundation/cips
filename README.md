@@ -123,5 +123,6 @@ Global Synchronizer CIPs
 | [cip-0127](/cip-0127/cip-0127.md) |  | On-Chain Enforcement of FA and SV Locking | Jonathan D.K. Gibbons, Simon Meier  | Tokenomics | Approved |
 | [cip-0129](/cip-0129/cip-0129.md) |  | Universal Burn and Synchronizer Pricing | Yiannis Varelas, Shaul Kfir | Tokenomics | Approved |
 | [cip-0130](/cip-0130/cip-0130.md) |  | Nomura Super Validator Weight 10 | Eric Saraniecki | Governance | Proposed |
+| [cip-0131](/cip-0131/cip-0131.md) |  | Add CapConnect+ (CC+) as a Super Validator (Max Weight 5) | CapConnect+, Inc. | Governance | Approved |
 
 
