@@ -36,7 +36,7 @@ so publishers keep a profile by extending it, which the holder or the issuer can
 
 Profile claims are informational.
 They neither establish legal identity nor prove ownership of an external account or resource.
-Apps SHOULD NOT interpret them as verified identity attributes or use them for name or recipient resolution.
+Apps SHOULD NOT interpret them as verified identity attributes or use them for name or recipient resolution, except for `preferred-name` as specified below.
 They MAY do so if they have additional information about the issuer of the credential.
 
 ### Party Profile Properties
@@ -66,8 +66,8 @@ Fully Qualified Party Name (FQPN) under which the party prefers to be displayed,
 as defined by the [Canton Party Name Resolution Standard](https://github.com/canton-foundation/cips/pull/171).
 
 - Publishers SHOULD encode a valid FQPN.
-- Apps MUST only use the value from the self-published section,
-  and MUST only display it as the party's name if it resolves back to the party, as specified by that standard.
+- Apps MUST use only the value from the self-published section,
+  and MUST NOT display it unless it resolves back to the party, as specified by that standard.
 
 #### `cip-<nr>/description`
 
@@ -343,14 +343,14 @@ e.g., her preferred name if it resolves back to her.
 
 A party `<mallory-party>` self-publishes the claims `cip-<nr>/display-name` = `Console Wallet`
 and `cip-<nr>/preferred-name` = `mainnet:dns:consolewallet.io`.
-The preferred name does not resolve back to `<mallory-party>`, so apps do not display it as the party's name.
+The preferred name resolves to `<console-wallet-party>` rather than to `<mallory-party>`, so apps do not display it.
 The display name is unverified, so it does not make `<mallory-party>` Console Wallet:
 apps show it only as profile metadata of that party.
 
 ### Example 4: Non-Conforming Website
 
 A credential contains the claim `cip-<nr>/website` = `not-a-url`.
-The value does not conform to this CIP, so apps may display it as plain text but not as a link.
+The value does not conform to the encoding of `website`, so apps may display it as plain text but not as a link.
 
 ## Backwards Compatibility
 
