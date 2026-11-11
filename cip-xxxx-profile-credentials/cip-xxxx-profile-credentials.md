@@ -11,9 +11,6 @@
   Requires: Canton Network Credentials Standard (https://github.com/canton-foundation/cips/pull/204)
 </pre>
 
-FIXME:
-- examples: profiles for realistic parties, e.g., the Console Wallet party, an explorer, a treasury, and a Console Wallet user.
-
 ## Abstract
 
 Define a standard set of party profile properties for credentials on the Canton Network,
@@ -304,24 +301,53 @@ An `https://` URL or an `ipfs://` URI keeps the image bytes off-ledger.
 
 ## Examples
 
-### Example 1: Self-Published Profile
+### Example 1: Console Wallet
 
-A self-published credential, for which issuer = holder = `<pixelplex-party>`, contains the following claims:
+The Console Wallet app is represented by the party `<console-wallet-party>`.
+Its self-published credential, for which issuer = holder = `<console-wallet-party>`, contains the following claims:
 
 | Property | Value |
 |---|---|
-| `cip-<nr>/display-name` | `PixelPlex` |
-| `cip-<nr>/avatar` | `https://cdn.example.com/profiles/pixelplex.png` |
-| `cip-<nr>/website` | `https://pixelplex.io` |
-| `cip-<nr>/email` | `info@pixelplex.io` |
-| `cip-<nr>/social:github` | `pixelplex` |
+| `cip-<nr>/display-name` | `Console Wallet` |
+| `cip-<nr>/preferred-name` | `mainnet:dns:consolewallet.io` |
+| `cip-<nr>/description` | `Self-custodial wallet on the Canton Network` |
+| `cip-<nr>/website` | `https://consolewallet.io` |
+| `cip-<nr>/social:telegram` | `ConsoleWallet` |
+| `cip-<nr>/social:x` | `ConsoleWallet` |
 
-### Example 2: Social Handles
+Publishers encode the handles without the leading `@`, and apps may render them as `@ConsoleWallet`.
 
-A credential contains the claims `cip-<nr>/social:telegram` = `Pixelplex` and `cip-<nr>/social:x` = `pixelplexinc`.
-Publishers encode the handles without the leading `@`, and apps may render them as `@Pixelplex` and `@pixelplexinc`.
+### Example 2: Console Wallet User
 
-### Example 3: Non-Conforming Website
+Alice, a Console Wallet user with the party `<alice-party>`, self-publishes the following claims:
+
+| Property | Value |
+|---|---|
+| `cip-<nr>/display-name` | `Alice` |
+| `cip-<nr>/preferred-name` | `mainnet:cns:alice.unverified.cns` |
+| `cip-<nr>/avatar` | `ipfs://<cid>` |
+
+Console Wallet also publishes a credential about her, for which issuer = `<console-wallet-party>` and holder = `<alice-party>`,
+with the email address she signed up with:
+
+| Property | Value |
+|---|---|
+| `cip-<nr>/email` | `alice@example.com` |
+
+The CC View explorer treats Console Wallet as a known issuer.
+Its profile page for Alice therefore shows two sections: first Alice's self-published claims, then the claims of Console Wallet.
+A send dialog, which is a compact view, shows only Alice's self-published claims,
+e.g., her preferred name if it resolves back to her.
+
+### Example 3: Impersonation Attempt
+
+A party `<mallory-party>` self-publishes the claims `cip-<nr>/display-name` = `Console Wallet`
+and `cip-<nr>/preferred-name` = `mainnet:dns:consolewallet.io`.
+The preferred name does not resolve back to `<mallory-party>`, so apps do not display it as the party's name.
+The display name is unverified, so it does not make `<mallory-party>` Console Wallet:
+apps show it only as profile metadata of that party.
+
+### Example 4: Non-Conforming Website
 
 A credential contains the claim `cip-<nr>/website` = `not-a-url`.
 The value does not conform to this CIP, so apps may display it as plain text but not as a link.
