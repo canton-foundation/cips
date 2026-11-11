@@ -1,7 +1,7 @@
 <pre>
   CIP: TBD
   Title: Canton Network Party Profiles
-  Author: PixelPlex Inc. (Vladislav Kokosh), Digital Asset (Simon Meier)
+  Author: Vladislav Kokosh (PixelPlex Inc.), Simon Meier (Digital Asset)
   Status: Draft
   Type: Standards Track
   Created: 2026-01-27
@@ -17,11 +17,11 @@ the [**Canton Network Credentials Standard**](https://github.com/canton-foundati
 
 It defines:
 
--   A set of **standard claim keys** for display, description, contact,
+-   A set of **standard properties** for display, description, contact,
     location, and social metadata.
 -   Rules for **self-published** credentials (`issuer` equals `holder`)
     and **issuer-published** credentials (`issuer` differs from
-    `holder`), using the same keys.
+    `holder`), using the same properties.
 -   An application-side display model: a full profile view is an ordered
     list of issuer sections; a compact view uses a single issuer slice.
 
@@ -39,20 +39,23 @@ This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https:/
 This CIP builds on the **Canton Network Credentials Standard** and uses
 its claim encoding and Credential Lookup API semantics.
 
-Every claim defined by this CIP describes the credential holder. Claim
-keys defined by this CIP MUST NOT contain an explicit `!subject` suffix,
-and applications MUST ignore such a claim if the suffix is present.
+Every claim defined by this CIP describes the credential holder. Such
+claims MUST leave `subject` unset, and applications MUST ignore a claim
+with a property defined by this CIP if its `subject` is set.
 
 A profile credential MAY be **self-published** (`issuer` equals `holder`)
 or **issuer-published** (`issuer` differs from `holder`). Issuer-published
 credentials let application providers attach profile metadata to parties
-they interact with, using the same well-known keys.
+they interact with, using the same well-known properties.
 Neither form verifies the claims' accuracy, establishes legal identity, or
 proves ownership of an external account or resource.
 
 This CIP does not define who may create a credential about a given
-`holder`. Authorization to publish is defined by the Canton Network
-Credentials Standard.
+`holder`. Authorization to publish is defined by each credential registry,
+as required by the Canton Network Credentials Standard. The Canton
+Credential Registry requires the authorization of both issuer and holder,
+so an issuer-published profile in that registry is always one that the
+holder agreed to.
 
 Profile metadata is expressed as **credential claims** under a dedicated
 namespace:
@@ -61,10 +64,10 @@ namespace:
 
 Where `<nr>` will be replaced by the assigned CIP number.
 
-Claim keys in this CIP use kebab-case, following the naming convention of
+Properties in this CIP use kebab-case, following the naming convention of
 the Canton Network Credentials Standard (for example, `display-name`).
 
-### Party Profile Claim Keys
+### Party Profile Properties
 
 Publishers include self-publishers and other issuers. Claim values are
 not validated at publication time. Publishers SHOULD encode values as
@@ -298,35 +301,46 @@ Applications:
 
 ### Party Profile Resolution
 
-Applications MUST retrieve party-profile credentials through the
-Credential Lookup API defined by the Canton Network Credentials Standard.
-A lookup MUST constrain `holder` to the party whose profile is requested.
-Applications SHOULD constrain `keyPrefix` to `cip-<nr>/` when only profile
-properties are required.
+Applications retrieve the party-profile credentials of a party `p` from
+the following sources defined by the Canton Network Credentials Standard:
 
-Applications MUST use only active credential records. A credential MUST
-be ignored when the lookup time is before `validFrom`, after `validUntil`,
-or after the registry record's `expiresAt`, when the respective field is
-present. Archived credentials MUST be ignored. The precise time-boundary
-semantics MUST follow the Canton Network Credentials Standard.
+-   **Ledger API.** Wallets SHOULD read the profile of their own user from
+    the credentials listed by the user's validator node via the Ledger API.
+    This covers all issuers and all registries.
+-   **Credential Lookup API.** For any party, applications MAY query
+    `(property, issuer, p, p)` with `effectiveOnly = true` for each property
+    defined by this CIP and each issuer whose section they show: `p` itself
+    for the self-published section, and each known issuer. The first
+    returned record is the selected one for that property and issuer.
+-   **Network explorers.** The Credential Lookup API requires the issuer to
+    be specified, so it cannot find unknown issuers. Applications MAY use
+    network explorers that offer lookups by holder to find unknown-issuer
+    sections.
 
-Applications SHOULD query the DSO Credential Registry by default and MAY
+Applications MUST use only credentials whose validity period is effective,
+as defined by the Canton Network Credentials Standard: a credential MUST be
+ignored before its `validFrom` or after its `validUntil`, when the
+respective field is set. Following that standard, applications SHOULD
+ignore `expiresAt`, which only determines how long the registry stores
+the record.
+
+Applications SHOULD query the Canton Credential Registry by default and MAY
 query additional registries according to an explicit application-specific
 policy. When multiple registries are queried, applications MUST apply a
 deterministic registry-priority order.
 
 #### Claim deduplication
 
-Within a single issuer, each claim key MUST have at most one selected
+Within a single issuer, each property MUST have at most one selected
 value. After the filtering above, a value from a higher-priority
-registry takes precedence. Within one registry, the credential with the
-latest registry record time takes precedence. If record times are equal,
-the contract ID MUST be used as the deterministic tie-breaker in the order
-defined by the Canton Network Credentials Standard.
+registry takes precedence. Within one registry, applications MUST apply
+the last-write-wins semantics for duplicates defined by the Canton Network
+Credentials Standard. A Credential Lookup API query as described above
+returns the selected record first.
 
 Applications MUST NOT collapse claims from different issuers into a single
-flat key/value map for display. The same key MAY therefore appear once in
-each issuer section.
+flat property/value map for display. The same property MAY therefore appear
+once in each issuer section.
 
 #### Profile display sections
 
@@ -347,14 +361,15 @@ Section order MUST be:
 An issuer MUST appear in at most one section. Empty sections MUST be
 omitted.
 
-Within each section, applications MUST render **well-known keys** defined
-by this CIP first, in the order specified in this CIP, for every such key
-that has a selected value. Unrecognized keys in that issuer's selected
-claims, if shown, MUST appear after the well-known keys. Applications MAY
-omit unrecognized keys they do not wish to display.
+Within each section, applications MUST render **well-known properties**
+defined by this CIP first, in the order specified in this CIP, for every
+such property that has a selected value. Unrecognized properties in that
+issuer's selected claims, if shown, MUST appear after the well-known
+properties. Applications MAY omit unrecognized properties they do not wish
+to display.
 
-Non-conforming **values** of well-known keys are handled separately:
-applications MAY ignore them, as specified under Party Profile Claim Keys.
+Non-conforming **values** of well-known properties are handled separately:
+applications MAY ignore them, as specified under Party Profile Properties.
 
 Applications SHOULD make the issuer of each section visible in the UI.
 Applications MAY hide unknown-issuer sections by default.
@@ -406,7 +421,7 @@ ensuring stability across applications and identity flows.
 A self-published profile (`issuer` equals `holder`) is still unverified
 informational metadata. Whether the holder authorized that publication is
 determined by the Canton Network Credentials Standard, not by this CIP.
-Issuer-published credentials use the same keys so application providers
+Issuer-published credentials use the same properties so application providers
 can attach profile metadata without waiting for a separate schema.
 Applications SHOULD distinguish self-published profile metadata from
 issuer-published metadata and from independently verified identity
@@ -416,13 +431,13 @@ Displaying issuers as separate sections, rather than merging them, keeps
 provenance visible and lets applications adopt third-party publishers at
 their own pace via an issuer whitelist.
 
-### Why Namespaced Claim Keys
+### Why Namespaced Properties
 
-Using namespaced keys `cip-<nr>/*`:
+Using namespaced properties `cip-<nr>/*`:
 
 -   minimizes protocol changes
 -   preserves compatibility with existing credential infrastructure
--   enables efficient querying
+-   avoids collisions with properties defined by other CIPs and applications
 -   allows extensibility
 
 Future well-known profile attributes may be standardized via amendments
@@ -430,20 +445,20 @@ to this CIP (or a separate CIP where appropriate) while continuing to
 use the `cip-<nr>/` namespace.
 
 This namespace design is primarily for forward compatibility:
-applications may ignore unrecognized keys without breaking.
+applications may ignore unrecognized properties without breaking.
 
 ### Relation to ENS
 
 ENS text records, in particular
 [ENSIP-5](https://docs.ens.domains/ensip/5#global-keys), are the
-inspiration for this profile key set. This CIP does not reuse ENS key
+inspiration for this profile property set. This CIP does not reuse ENS key
 strings as-is.
 
 The intentional differences are:
 
--   Canton keys live under this CIP's `cip-<nr>/` namespace, so observed
+-   Canton properties live under this CIP's `cip-<nr>/` namespace, so observed
     data can be traced back to this specification.
--   Keys use kebab-case to match the Canton Network Credentials Standard
+-   Properties use kebab-case to match the Canton Network Credentials Standard
     (`display-name` rather than ENS `display`). ENS `display` also has
     name-matching rules that do not apply to Canton party IDs.
 -   A website is `website` rather than ENS `url`.
@@ -494,16 +509,17 @@ but leaves configurable:
 
 ### Claim Deduplication
 
-Credential claims are a map from key to value. Collapsing to one value per
-key inside an issuer section keeps that section predictable: at most one
+The Canton Network Credentials Standard resolves duplicate claims with the
+same property by last-write-wins. Collapsing to one value per property
+inside an issuer section keeps that section predictable: at most one
 `display-name`, one `email`, one `website`, and so on, including
-unrecognized keys.
+unrecognized properties.
 
-Multiple values for the same key are still visible when they come from
-different issuers, because each issuer is a separate section. Two `email`
-claims from the same issuer are not: last-write-wins applies. A second
-address under the same issuer can be added later via an additional
-well-known key or an amendment, rather than making every field
+Multiple values for the same property are still visible when they come
+from different issuers, because each issuer is a separate section. Two
+`email` claims from the same issuer are not: last-write-wins applies. A
+second address under the same issuer can be added later via an additional
+well-known property or an amendment, rather than making every field
 multi-value.
 
 ### Why Avatar URIs Omit `data:`
@@ -561,11 +577,11 @@ Standard.
 -   No changes to registry contracts beyond those introduced by the Canton Network Credentials Standard
 
 Applications not implementing this CIP will treat the claims as generic
-key--value metadata.
+property--value metadata.
 
 ## Reference implementation
 
 Not required.
 
-This CIP specifies only claim keys and application-side interpretation
+This CIP specifies only properties and application-side interpretation
 rules.
