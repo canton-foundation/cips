@@ -12,7 +12,6 @@
 </pre>
 
 FIXME:
-- relation to CPRP (#171): describe how the two CIPs split the work, or state that the split changed.
 - examples: profiles for realistic parties, e.g., the Console Wallet party, an explorer, a treasury, and a Console Wallet user.
 
 ## Abstract
@@ -63,6 +62,15 @@ Human-readable name used for UI display.
 
 - Publishers SHOULD encode the value as a Unicode string of at most **64 Unicode characters**.
 - Apps MAY gracefully truncate the rendered value.
+
+#### `cip-<nr>/preferred-name`
+
+Fully Qualified Party Name (FQPN) under which the party prefers to be displayed,
+as defined by the [Canton Party Name Resolution Standard](https://github.com/canton-foundation/cips/pull/171).
+
+- Publishers SHOULD encode a valid FQPN.
+- Apps MUST only use the value from the self-published section,
+  and MUST only display it as the party's name if it resolves back to the party, as specified by that standard.
 
 #### `cip-<nr>/description`
 
@@ -259,13 +267,21 @@ The differences are:
 The covered ENSIP-5 global keys, under this CIP's names, are
 `display-name` (`display`), `avatar`, `description`, `keywords`, `notice`, `email`, `phone`, `location`, `mail`, and `website` (`url`).
 The covered service keys are `social:github` (`com.github`), `social:x` (`com.twitter`), `social:telegram` (`org.telegram`), and `social:linkedin` (`com.linkedin`).
-This CIP additionally defines `social:discord`, which has no ENSIP-5 counterpart.
+This CIP additionally defines `preferred-name` and `social:discord`, which have no ENSIP-5 counterpart.
 
 The following ENSIP-5 service keys are not defined here:
 
 - the legacy `vnd.*` aliases (`vnd.github`, `vnd.twitter`, `vnd.peepeth`), which ENSIP-5 replaced by `com.*` keys;
 - `com.peepeth`, as it refers to a defunct service;
 - `io.keybase`, which can be added by an amendment if there is a concrete need.
+
+### Relation to Party Name Resolution
+
+The [Canton Party Name Resolution Standard](https://github.com/canton-foundation/cips/pull/171) (CPRP) standardizes human-readable party names:
+their format, their resolution to party IDs and back, and how apps render them.
+The `preferred-name` property, which CPRP uses to choose the name to display for a party, is defined in this CIP,
+as it is another kind of self-published party metadata.
+Unlike the other properties, a preferred name is verified before use: apps display it only if it resolves back to the party.
 
 ### One Value per Property and Issuer
 
