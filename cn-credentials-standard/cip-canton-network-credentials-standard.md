@@ -61,15 +61,26 @@ which serves as a base credential registry for the network.
 It is for example used to [discover the other credential registries in the network](#standardized-application-and-metadata-discovery).
 
 Note also that credential registries are not required to support third-party credential issuers.
-As explained below, the `CredentialFactory` API is an optional API.
+As explained below, the [Credential Registry Publication API](#credential-registry-publication-api) is optional.
 This enables a simpler deployment model of Credential Issuer apps where their one app
-serves the dual purpose of issuing credentials and serving the read-only Credential Registry APIs.
+serves the dual purpose of issuing credentials and serving the [Credential Registry Query API](#credential-registry-query-api).
 
 ### Credential Registry APIs
 
-#### Daml APIs
+The APIs are split into three parts, analogous to how the [CIP-0056](../cip-0056/cip-0056.md) APIs separate holdings, registry metadata, and transfer instructions:
 
-The Daml APIs mediate the on-ledger interactions of the different applications with the credential registry. They consist of the mandatory implementation of the `Credential` interface and an optional implementation of the `CredentialFactory` interface. We explain them in the following two sections. We specify the expected usage of these APIs by apps and wallets thereafter.
+| API | Kind | Required | Purpose |
+| --- | --- | --- | --- |
+| [Credential Record API](#credential-record-api) | Daml | MUST | Data schema of credentials and the `Credential` interface implemented by credential records |
+| [Credential Registry Query API](#credential-registry-query-api) | HTTP | SHOULD | Registry info, credential lookup, and bulk credential retrieval |
+| [Credential Registry Publication API](#credential-registry-publication-api) | Daml + HTTP | MAY | Joint publication of credential records by their issuer and holder |
+
+The Credential Record API defines what a credential is, independently of any registry service.
+The two registry APIs define how a registry serves and accepts credential records.
+
+#### Credential Record API
+
+The Credential Record API mediates the on-ledger interactions of apps and wallets with credential records. It consists of the `Credential` Daml interface, which every credential registry MUST implement for the credential records it stores.
 
 ##### Credential Interface
 
@@ -184,31 +195,20 @@ data Credential_RevokeResult = Credential_RevokeResult with
   deriving (Eq, Show)
 ```
 
+The `Credential` interface is specified in [Splice/Api/Credential/RecordV1.daml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-record-v1/daml/Splice/Api/Credential/RecordV1.daml).
+
 Credential registries MAY enforce limits on the credentials they store to avoid operational problems from overly large credentials. The limits are communicated to users via the [Credential Registry Info API](#credential-registry-info-api). See [Canton Credential Registry Limits](#canton-credential-registry-limits) for the concrete limits enforced by the Canton Credential Registry.
 
-##### Credential Factory Interface
-
-The purpose of this API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
-
-Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
-
-This API uses the factory pattern pioneered in [CIP-0056](../cip-0056/cip-0056.md): the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. Each element of its `newCredentials` argument becomes one credential record with its claims and validity period. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
-
-The specifications of the `Credential` and `CredentialFactory` Daml interfaces and of the HTTP API endpoint can be found here:
-
-- [Splice/Api/Credential/RegistryV1.daml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/daml/splice-api-credential-registry-v1/daml/Splice/Api/Credential/RegistryV1.daml) (includes the data format of credentials)
-- [splice-api-credential-registry-update-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-update-v1.yaml)
-
-##### Expected App Usage of Daml APIs
+##### Expected App Usage of the Credential Interface
 
 We expect applications that need to fetch credentials as part of their Daml workflows to use `Credential_Get`.
 We also expect wallets to be able to list all credentials held by their user by asking the user's validator node for all active contracts implementing the `Credential` interface. This covers the credentials from all credential registries at once, see [Listing Credentials via the Ledger API](#listing-credentials-via-the-ledger-api). Wallets can let the user revoke an unwanted credential using the `Credential_Revoke` choice, provided the credential's `revokableBy` field contains a group consisting only of the user's party. We also expect that wallets can let the user open the credential issuer's custom dApp for managing that credential. We expect them to be able to do so as explained in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery).
 
-Note that apps and users that want to use credentials from a specific registry in their Daml workflows must vet the DAR files of that credential registry.
+Note that apps and users that want to use credentials from a specific registry in their Daml workflows must vet the DAR files of that credential registry, in addition to the `splice-api-credential-record-v1` DAR.
 
-#### Read-Only HTTP APIs
+#### Credential Registry Query API
 
-Credential registries SHOULD serve the read-only HTTP APIs specified below.
+Credential registries SHOULD serve the read-only Credential Registry Query API. It consists of the endpoints described in the following sections, which are specified in [credential-registry-query-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-query-v1/openapi/credential-registry-query-v1.yaml).
 
 ##### Credential Registry Info API
 
@@ -216,8 +216,6 @@ The purpose of the credential registry info API is twofold:
 
 1. It enables an asynchronous rollout of newer versions of the credential registry APIs.
 2. It informs clients about constraints of the registry (e.g., limits on the number of claims or results).
-
-The API is specified in [splice-api-credential-registry-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-v1.yaml).
 
 ##### Credential Lookup API
 
@@ -232,7 +230,6 @@ The API returns the credential records with matching `issuer` and `holder` that 
 A `subject` equal to the `holder` also matches claims without a subject, as those pertain to the holder.
 This is all that is needed for the lookups in [Standardized Application and Metadata Discovery](#standardized-application-and-metadata-discovery), and it keeps the indexing overhead for credential registries small. Richer queries are left to network explorers, see [Rich Credential Lookup](#rich-credential-lookup).
 
-The API is specified in [splice-api-credential-registry-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-v1.yaml).
 By default the API only returns the `CredentialView` of a credential. It optionally also includes the underlying contract so that it can be disclosed for usage in a Daml transaction that reads the credential.
 
 ###### Handling Duplicates
@@ -263,17 +260,30 @@ An explorer that falls further behind than that window starts over and receives 
 
 Registries SHOULD support a minimum retention window of 7 days to ensure that explorers can reliably ingest all credential events.
 
-The API is specified in [splice-api-credential-registry-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-v1.yaml).
-
 ##### Rich Credential Lookup
 
 Network explorers MAY offer richer lookups than the standardized [Credential Lookup API](#credential-lookup-api), for example by property prefix, by several issuers, or by subject alone.
 They ingest credentials through the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api) and build their own indexes. This CIP does not standardize such lookups, and the Canton Credential Registry does not serve them.
 
+#### Credential Registry Publication API
+
+##### Credential Factory Interface
+
+The purpose of this API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
+
+Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
+
+This API uses the factory pattern pioneered in [CIP-0056](../cip-0056/cip-0056.md): the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. Each element of its `newCredentials` argument becomes one credential record with its claims and validity period. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
+
+The `CredentialFactory` Daml interface and the HTTP API endpoint are specified in:
+
+- [Splice/Api/Credential/RegistryPublicationV1.daml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-publication-v1/daml/Splice/Api/Credential/RegistryPublicationV1.daml)
+- [credential-registry-publication-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-publication-v1/openapi/credential-registry-publication-v1.yaml)
+
 ### Canton Credential Registry
 
 Splice adds a decentralized base credential registry that is run by the SV nodes as part of the Global Synchronizer.
-Its admin party is the `dso` party, and it implements all the APIs defined above, including the optional `CredentialFactory` API.
+Its admin party is the `dso` party, and it implements all the APIs defined above, including the optional Credential Registry Publication API.
 It sets `revokableBy` to `[[holder], [issuer]]` on all its records, so that either the holder or the issuer can revoke a record on their own.
 It uses a retention window of 7 days for the events served by the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api).
 
@@ -414,7 +424,7 @@ Private credentials are left to a future CIP. The `Credential_Get` choice alread
 
 ### Listing Credentials via the Ledger API
 
-Wallets list their own user's credentials through the Ledger API of the user's validator node, and use the read-only HTTP APIs to look up credentials of other parties, for example for discovery.
+Wallets list their own user's credentials through the Ledger API of the user's validator node, and use the [Credential Registry Query API](#credential-registry-query-api) to look up credentials of other parties, for example for discovery.
 Looking up the user's credentials via the Ledger API has two advantages:
 
 1. It also works for private credentials, which are not publicly discoverable through the HTTP APIs.
@@ -503,7 +513,7 @@ The Canton Credential Registry is expected to be implemented as follows:
    1. A template that implements the `Credential` interface and serves to record credentials in the registry.
    2. An implementation of the `CredentialFactory`, so that issuers and holders can jointly publish credentials to the registry.
    3. A Token Standard `TransferFactory` implementation on the registry that supports [extending the expiration](#extended-expiration-durations) of credentials, optionally by burning CC.
-2. The Scan app backend running on SV nodes implements the read-only HTTP APIs and the HTTP API of the `CredentialFactory`,
+2. The Scan app backend running on SV nodes implements the HTTP endpoints of the Credential Registry Query API and the Credential Registry Publication API,
    so that any Scan app can be used to interact with the Canton Credential Registry.
    The Scan app internally builds an index over all credentials in its backing Postgres DB. A single multi-column index is sufficient,
    as the lookup API only supports one query pattern.
