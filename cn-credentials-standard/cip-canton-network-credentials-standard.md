@@ -268,9 +268,7 @@ They ingest credentials through the [Bulk Credential Retrieval API](#bulk-creden
 
 #### Credential Registry Publication API
 
-##### Credential Factory Interface
-
-The purpose of this API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
+The purpose of the Credential Registry Publication API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
 
 Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
@@ -439,7 +437,7 @@ but is deliberately simpler: claims are flat `(subject, property, value)` text t
 and there is no embedded proof section.
 This simplification is possible because the Daml ledger provides what proofs provide in the W3C model:
 credential records are created with the on-ledger authorization of their issuer and holder
-(for registries following the SHOULD in the [Credential Factory Interface](#credential-factory-interface)),
+(for registries following the SHOULD in the [Credential Registry Publication API](#credential-registry-publication-api)),
 and their integrity is guaranteed by the ledger.
 
 Flat text triples also keep the lookup and indexing requirements for registries simple
@@ -450,7 +448,7 @@ Interoperability with full W3C Verifiable Credentials can be standardized in a f
 
 Self-authenticating credentials, where the validity of the credential can be verified solely based on its content and cryptographic proofs, are out of scope for this CIP.
 Instead, credential records carry on-ledger authorization: they are created with the authorization of both issuer and holder
-(for registries following the SHOULD in the [Credential Factory Interface](#credential-factory-interface)),
+(for registries following the SHOULD in the [Credential Registry Publication API](#credential-registry-publication-api)),
 and the ledger guarantees their integrity.
 
 Beyond that, the trust in a credential comes from the reputation and verification processes of the issuing party
