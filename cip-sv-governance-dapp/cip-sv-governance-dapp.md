@@ -2,7 +2,7 @@
   CIP: CIP-TBD
   Title: SV Governance dApp Support
   Author: Raymond Roestenburg <raymond.roestenburg@digitalasset.com>
-  Discussions-To: [https://lists.sync.global/g/cip-discuss](https://lists.sync.global/g/cip-discuss)
+  Discussions-To: [https://lists.sync.global/g/cip-discuss/topic/cip_draft_sv_governance_dapp/122228821](https://lists.sync.global/g/cip-discuss/topic/cip_draft_sv_governance_dapp/122228821)
   Comments-Summary: No comments yet.
   Comments-URI: [https://github.com/canton-foundation/cips/pulls](https://github.com/canton-foundation/cips/pulls)
   Status: Draft
