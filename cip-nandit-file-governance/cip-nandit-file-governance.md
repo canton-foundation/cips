@@ -265,9 +265,9 @@ Ecosystem: [https://lighthouse.storage/ecosystem](https://lighthouse.storage/eco
 
 Previously a Software Engineer at Fleek, and a Gitcoin Kernel Block III Fellow. Active contributor in IPFS, Filecoin, Walrus and building products specializing in decentralized storage and encryption. Nandit has presented Lighthouse's work at Fil Dev Summit, Filecoin Orbit (ETHDenver), DevCon Bangkok, WebX Japan, and ETH Pragma. He was also judge at ETH Singapore, ETH India and mentored at ETH New York.
 
-### Ravish Sharma, Co-founder & CTO of Lighthouse
+### Aakash Taneja, Tech lead - Lighthouse
 
-Focuses on [Lighthouse](https://www.lighthouse.storage/)'s technical architecture, including Kavach, its client-side threshold encryption system. Previously co-founded IC Drive, a fully decentralized, client-side encrypted cloud storage platform, and has worked on machine learning, IoT, and product engineering across Web3 and fintech.
+Focuses on [Lighthouse](https://www.lighthouse.storage/)'s technical architecture, including Kavach, its client-side threshold encryption system..
 
 ## References
 
