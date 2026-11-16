@@ -6,7 +6,7 @@
   Discussions-To: [https://lists.sync.global/g/cip-discuss](https://lists.sync.global/g/cip-discuss)
   Comments-Summary: No comments yet.
   Comments-URI: [https://github.com/canton-foundation/cips/pulls](https://github.com/canton-foundation/cips/pulls)
-  Status: Draft
+  Status: Proposed
   Type: Tokenomics
   Created: 2026-11-09
   License: CC0-1.0
@@ -83,3 +83,7 @@ The paymaster model provides a straightforward first step toward the universal b
 ## Copyright
 
 This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
+
+## Changelog
+- Created: 2026-11-09
+- Proposed: 2026-11-16
