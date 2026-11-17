@@ -106,10 +106,10 @@ and run against any SV's Scan. The internal vote endpoints stay as they are.
 - The voter party's validator pays the traffic for its submissions.
 - An external party prepares and signs each submission, which takes longer than an internal submission. The dApp
   handles votes close to a request's deadline, and votes that another SV's vote overtakes before they are executed.
-- Requesting votes has no rate limit today, and delegation adds a second party per SV that can request votes. Vote
-  requests through a delegation are therefore rate limited. Casting and changing votes need no extra limit: an SV node
-  has one vote, and the existing cooldown already limits how often it changes, so the rate limit never blocks a vote
-  before a deadline.
+- Requesting votes has no rate limit today, and delegation adds a second party per SV that can request votes. This
+  CIP adds no rate limit: delegating only to a trusted voter party is the SV operator's responsibility, the voter party
+  pays the traffic for its requests, and the operator can remove the delegation at any time. Votes themselves are
+  already limited to one per SV node, with the existing cooldown for changing a vote.
 
 ### 4. What does not change
 
@@ -158,7 +158,7 @@ operator and voter party voting on the same request, and offboarded SVs.
 
 ## Changelog
 
-- 2026-11-17: Review feedback: protection of the voter party's keys, rate limit on vote requests through a delegation,
+- 2026-11-17: Review feedback: protection of the voter party's keys, no rate limit on vote requests through a delegation,
   delegations from several SV nodes, dApp reads delegations from the voter party's ledger API.
 - 2026-11-04: Review feedback: operator pages and parameters read-only in the dApp, wording.
 - 2026-11-03: Review feedback: wording aligned with the development fund proposal, implementation detail left to the
