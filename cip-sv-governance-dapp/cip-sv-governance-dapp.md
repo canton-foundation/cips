@@ -65,8 +65,10 @@ cooldown period for changing a vote applies to both.
 #### Delegation Lifecycle
 
 The SV operator sets the voter party for its node, and can change or remove it at any time. A voter party can hold
-delegations from several SV nodes, and may choose which SV it acts for. A delegation set up by an SV no longer works if
-that SV has been offboarded, because `DsoRules` rejects those votes.
+delegations from several SV nodes, and may choose which SV it acts for. Each delegation belongs to one SV node, so an
+operator removes its own delegation without affecting the others. Delegated votes are recorded with the voter party, so
+Scan shows when one voter party votes for several SV nodes. A delegation set up by an SV no longer works if that SV has
+been offboarded, because `DsoRules` rejects those votes.
 
 #### Governance dApp
 
@@ -97,11 +99,14 @@ and run against any SV's Scan. The internal vote endpoints stay as they are.
 
 - The voter party holds the SV's full voting power and nothing else of the node. If its keys are lost or compromised,
   the operator removes the delegation to the voter party, and can vote for itself in the meantime.
+- The voter party's keys therefore deserve the same protection as the SV's own: an SV should only delegate to a voter
+  party whose keys are held in a KMS or HSM and that is hosted on more than one validator.
 - The voter party's validator pays the traffic for its submissions.
 - An external party prepares and signs each submission, which takes longer than an internal submission. The dApp
   handles votes close to a request's deadline, and votes that another SV's vote overtakes before they are executed.
-- Requesting votes has no rate limit today, and delegation adds a second party per SV that can request votes. The voter
-  party pays the traffic for its requests, and the operator can remove it at any time.
+- Requesting votes has no rate limit today, and delegation adds a second party per SV that can request votes. The
+  delegation therefore limits how many vote requests the voter party can create within a time window, tracked on the
+  delegation itself. Votes are already limited to one per SV node, with the existing cooldown for changing a vote.
 
 ### 4. What does not change
 
@@ -150,6 +155,8 @@ operator and voter party voting on the same request, and offboarded SVs.
 
 ## Changelog
 
+- 2026-11-17: Review feedback: protection of the voter party's keys, rate limit on vote requests through a delegation,
+  delegations from several SV nodes.
 - 2026-11-04: Review feedback: operator pages and parameters read-only in the dApp, wording.
 - 2026-11-03: Review feedback: wording aligned with the development fund proposal, implementation detail left to the
   reference implementation, scope limits stated.
