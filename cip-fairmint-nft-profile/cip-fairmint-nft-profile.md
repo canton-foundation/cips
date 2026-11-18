@@ -52,7 +52,7 @@ token-standard packages.
 
 | Package | Module | Contents |
 | ------- | ------ | -------- |
-| `nft-profile-v1` | `Nft.Profile.V1` | `Nft` interface and its types (section 8) |
+| `splice-api-token-non-fungible-v1` | `Splice.Api.Token.NonFungible.V1` | `Nft` interface and its types (section 8) |
 
 The package depends on `splice-api-token-holding-v2` for `InstrumentId`.
 Daml interface packages are not changed in place. Adding a field or a
