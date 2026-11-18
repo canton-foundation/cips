@@ -65,7 +65,7 @@ ones alongside it.
 ```haskell
 data NftId = NftId with
     admin         : Party
-    collection_id : Text
+    collectionIdd : Text
     token_id      : Text
 ```
 
