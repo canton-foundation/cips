@@ -78,6 +78,9 @@ The APIs are split into three parts, analogous to how the [CIP-0056](../cip-0056
 The Credential Record API defines what a credential is, independently of any registry service.
 The two registry APIs define how a registry serves and accepts credential records.
 
+These APIs are final only once they are published in a Splice release.
+Small changes are expected until then, as they are only released once implemented and validated in Splice.
+
 #### Credential Record API
 
 The Credential Record API mediates the on-ledger interactions of apps and wallets with credential records. It consists of the `Credential` Daml interface, which every credential registry MUST implement for the credential records it stores.
@@ -211,12 +214,16 @@ Note that apps and users that want to use credentials from a specific registry i
 
 Credential registries SHOULD serve the read-only Credential Registry Query API. It consists of the endpoints described in the following sections, which are specified in [credential-registry-query-v1.yaml](https://github.com/canton-network/splice/blob/meiersi/std/credential-registry/credential-standard/splice-api-credential-registry-query-v1/openapi/credential-registry-query-v1.yaml).
 
+The lookup and snapshot endpoints evaluate queries at a vector clock `synchronizerTimes` of `(synchronizerId, recordTime)` pairs, and report the one they used.
+Records on synchronizers not in `synchronizerTimes` are not returned. Without `synchronizerTimes`, the latest processed times of all synchronizers are used.
+Clients can thereby implement BFT reads from decentralized registries by querying f + 1 registry backends and comparing the results for JSON equality.
+
 ##### Credential Registry Info API
 
 The purpose of the credential registry info API is twofold:
 
 1. It enables an asynchronous rollout of newer versions of the credential registry APIs.
-2. It informs clients about constraints of the registry (e.g., limits on the number of claims or results).
+2. It informs clients about constraints of the registry (e.g., limits on the number of claims or results, the event retention window, or how old `synchronizerTimes` may be).
 
 ##### Credential Lookup API
 
@@ -225,7 +232,7 @@ The credential lookup API serves queries of the form `(property, issuer?, holder
 - `property` is required and matches the whole property of a claim, not a prefix.
 - `issuer`, `holder`, and `subject` are optional filters. They MUST be specified in order: a filter MAY only be specified if all filters before it are specified.
 
-It also supports a boolean flag `effectiveOnly` to return only records whose validity period is effective at the time the query is served.
+It also supports a boolean flag `effectiveOnly` to return only records whose validity period is effective at the record time of their synchronizer.
 
 The API returns the credential records with matching `issuer` and `holder` that contain a claim with matching `property` and `subject`.
 A `subject` equal to the `holder` also matches claims without a subject, as those pertain to the holder.
@@ -233,17 +240,20 @@ This is all that is needed for the lookups in [Standardized Application and Meta
 
 By default the API only returns the `CredentialView` of a credential. It optionally also includes the underlying contract so that it can be disclosed for usage in a Daml transaction that reads the credential.
 
+The API also supports looking up a single active record by contract id.
+
 ###### Handling Duplicates
 
 The API returns the record time of the transaction that created the credential contract.
 Record time is the Canton protocol sequencing time of that transaction's confirmation request.
-The API orders the results with equal `property`, `issuer`, and `holder` by record time descending, with contract id ascending as the tie-break.
+The API orders the results with equal `property`, `issuer`, and `holder` by synchronizer id, then by record time descending, with contract id ascending as the tie-break.
 
 Two credential records are duplicates if they have the same `issuer` and `holder`, and both contain a claim with the same `subject` and `property`.
-When querying with a fully specified query `(property, issuer, holder, subject)` and `effectiveOnly = true`, all returned records are duplicates of each other, and the first returned record is the one that should be used for last-write-wins semantics.
+Registries SHOULD NOT create duplicates on different synchronizers, as record times of different synchronizers are not comparable.
+When querying with a fully specified query `(property, issuer, holder, subject)` and `effectiveOnly = true`, all returned records are duplicates of each other, and the first returned record per synchronizer is the one that should be used for last-write-wins semantics.
 
 For queries that are not fully specified, or that do not set `effectiveOnly`, clients must implement the last-write-wins semantics themselves.
-They can do so by selecting, for each group of duplicates, the claim from the first record of that group in the returned order whose validity period is effective at the time the query is served, as judged by the client's clock.
+They can do so by selecting, for each group of duplicates on the same synchronizer, the claim from the first record of that group in the returned order whose validity period is effective at the record time of its synchronizer.
 
 The API MAY return records whose `expiresAt` has passed, but which the registry has not yet archived.
 Clients SHOULD ignore `expiresAt` when choosing a record, as it is the validity period given by `validFrom` and `validUntil` that determines whether a credential is effective.
@@ -257,7 +267,8 @@ even if its `createdAt` is older than that of its duplicates.
 The purpose of the bulk credential retrieval API is to enable network explorers to ingest all credentials of a registry as they are created, updated, and archived.
 
 The corresponding HTTP endpoints work by exposing the list of synchronizers which are used by the registry to store credentials, and then serving pages of create and archive events per synchronizer in ascending record time order, with contract id ascending as the tie-break. A reassignment of a credential contract to a different synchronizer is served as an archive event on the source synchronizer and a create event on the target synchronizer. A registry MAY prune the events of archived records once they are older than its retention window, which it advertises via the [Credential Registry Info API](#credential-registry-info-api).
-An explorer that falls further behind than that window starts over and receives the current records without their pruned history.
+An explorer starts from a snapshot of the active records, and continues with the events after the `synchronizerTimes` of that snapshot.
+An explorer that falls further behind than that window starts over from a new snapshot.
 
 Registries SHOULD support a minimum retention window of 7 days to ensure that explorers can reliably ingest all credential events.
 
@@ -320,8 +331,9 @@ newExpiresAt0     = max(expiresAt, transfer.requestedAt) + freePeriod + purchase
 newExpiresAt      = min(newExpiresAt0, validUntil)    -- only if validUntil is set
 ```
 
-where `transfer.requestedAt` is the wallet-provided timestamp on the Token Standard transfer, which is checked to be in the past.
-The registry rejects extension requests where `newExpiresAt` is not later than the current `expiresAt`,
+where `transfer.requestedAt` is the wallet-provided timestamp on the Token Standard transfer, which is checked to be in the past and at most 24 hours old.
+The 24 hours leave external parties time to prepare and sign the transfer before submitting it.
+The registry rejects extension requests where `newExpiresAt` is not later than the current `expiresAt`, or not in the future,
 so that no CC is burned without effect.
 
 A paid extension also adds the free period, as that is de facto covered by the traffic paid for the extension transaction.
@@ -342,7 +354,9 @@ A credential record is accepted by the Canton Credential Registry only if all of
 - if both are set, `validUntil` is later than `validFrom`; and if set, `validUntil` is later than `createdAt`.
   Note that `validFrom` may be earlier than `createdAt`, so that credentials can be registered even within their validity period.
 
-The registry sets `createdAt` to the `requestedAt` argument of `CredentialFactory_UpdateCredentials`, and the initial `expiresAt` to `createdAt` plus the free period, capped at `validUntil` if that is set.
+The registry sets `createdAt` to the `requestedAt` argument of `CredentialFactory_UpdateCredentials`, which is checked to be in the past and at most 24 hours old.
+It sets the initial `expiresAt` to `createdAt` plus the free period, capped at `validUntil` if that is set.
+`expiresAt` is never later than `validUntil`, and an extension never moves it earlier.
 
 The size limits are advertised via the [Credential Registry Info API](#credential-registry-info-api). Other registries MAY choose different limits.
 
@@ -371,6 +385,8 @@ It serves to discover the off-ledger credential registry API of a specific crede
 It is published by `registryAdmin` using a self-published credential (issuer = holder = `registryAdmin`) in the Canton Credential Registry, with the claim's subject unset.
 It specifies a comma-separated list of URL prefixes for party `registryAdmin`. Clients append the paths of the credential registry OpenAPI specs to them, as for the CIP-0056 registry URLs.
 Multiple URLs are supported for decentralized registries, so that clients can implement BFT reads.
+Data that clients use in a Daml transaction, such as disclosed credential contracts and choice contexts, can be fetched from any one URL, as the transaction validates it on-ledger; clients retry with another URL if the submission fails, as described in [CIP-0056](../cip-0056/cip-0056.md#off-ledger-api-discovery-and-access).
+Data that is only used off-ledger, such as lookup results used for discovery, is fetched from more than a third of the URLs, and accepted only if all responses are equal when compared as JSON.
 
 #### Discovering Credential Issuer Applications
 
@@ -514,8 +530,8 @@ The Canton Credential Registry is expected to be implemented as follows:
    3. A Token Standard `TransferFactory` implementation on the registry that supports [extending the expiration](#extended-expiration-durations) of credentials, optionally by burning CC.
 2. The Scan app backend running on SV nodes implements the HTTP endpoints of the Credential Registry Query API and the Credential Registry Publication API,
    so that any Scan app can be used to interact with the Canton Credential Registry.
-   The Scan app internally builds an index over all credentials in its backing Postgres DB. A single multi-column index is sufficient,
-   as the lookup API only supports one query pattern.
+   The Scan app internally indexes all credentials in its backing Postgres DB, including recently archived ones,
+   so that it can serve queries at past `synchronizerTimes`.
 3. The Scan app proxy served by the validator app implements the same HTTP APIs, calling out to multiple Scan apps and comparing the results to implement BFT reads.
 
 ## Changelog
