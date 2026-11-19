@@ -2,7 +2,7 @@
 
 <pre>
   CIP: ?
-  Layer: Daml
+  Layer: Applications
   Title: Canton Access and Privacy Standard
   Author: RedStone
     Łukasz Kalbarczyk <lukasz@redstone.finance>
@@ -28,13 +28,13 @@ the content fixed in the round of its number. The party that publishes the
 data is a stakeholder of nothing a consumer touches, so it learns who holds
 a license and nothing about consumption.
 
-The standard is oracle-agnostic: an oracle joins it by providing one
-contract, a verifier for its own signing scheme. It builds on the
+The standard is oracle-agnostic: an oracle joins it by providing one contract,
+a verifier for its own signing scheme. It builds on the
 [Canton Data Standard](https://github.com/kaikodata/canton-data-standard):
-every capsule implements `PublishedDataPoint`, so an
-application written against that standard reads a CAPS capsule unchanged.
-A reference implementation, with verifiers for RedStone payloads and for the
-Data Standard's signed envelope, accompanies the proposal.
+every capsule implements `PublishedDataPoint`, so an application written
+against that standard reads a CAPS capsule unchanged. A reference
+implementation, with verifiers for RedStone payloads and for the Data
+Standard's signed envelope, accompanies the proposal.
 
 ## Motivation
 
@@ -169,12 +169,12 @@ The standard refers to parties by role. One party may hold several roles.
 |---|---|
 | Operator | Publishes the data set: owns the root license and is the distributor of every root capsule. |
 | Publisher | Submits a publication. The operator always may; an implementation may admit others. |
-| Readers | The parties entitled to see that a round exists and to check capsules against it. |
+| Readers | The parties entitled to see that a round exists and to check capsules against it. By default one readers party, which consumers read as (section 4). |
 | Distributor | The owner of a license, who signs the capsules created under it. |
 | Licensee | A party a license entitles to create a sublicense from it. On the root license, also the audience of every root capsule. |
 | Client | A party a capsule is distributed to. |
 | Consumer | A client that verifies a capsule before acting on it. |
-| Auditors | In the reference implementation, parties that co-sign the definition, the head and the rounds, so that the operator cannot archive them, fork the chain or mint a round alone; they may pause publication. Not named by the interfaces. |
+| Auditors | In the reference implementation, parties that co-sign the definition, the head and the rounds, so that the operator cannot archive the definition or the head, fork the chain or mint a round alone, and retires a round only through `Round_Archive`; they may pause publication. Not named by the interfaces. |
 
 The privacy goal is stated in terms of these roles: **the operator learns
 who holds a license and who publishes rounds; it does not learn who
@@ -187,9 +187,10 @@ consumes, or how much any distributor distributes.**
 [Canton Data Standard](https://github.com/kaikodata/canton-data-standard)
 packages `canton-data-standard-utils-v1` (for `AnyValue`) and
 `canton-data-standard-datapoint-v1` (for `PublishedDataPoint`), version
-0.2.0. It defines
-seven interfaces and the shared types below, and no executable code: every
-choice body is a single call of an interface method.
+0.3.0. It defines seven interfaces and the shared types below, and no
+executable code: every choice body is a single call of an interface method,
+except `Round_Fetch`, which checks the round's signatories and returns its
+view.
 
 ```haskell
 data CapsuleContent = CapsuleContent with
@@ -209,6 +210,10 @@ data CreateRoundResult = CreateRoundResult with
 ```
 
 ### 3. The interfaces
+
+A view is what its template returns, and any template may implement an
+interface: where a check decides whose contract it holds, an implementation
+MUST go by the contract's signatories, never by its view.
 
 #### 3.1 `DataDefinition`
 
@@ -260,10 +265,18 @@ Requirements:
 - Each verdict MUST be a function of the choice's arguments and the
   verifier's own fields only: not of ledger time, the calling party or any
   other contract. A verifier MUST NOT fetch or exercise another contract.
-- The commitment MUST be stable across instances with the same parameters,
-  and MUST depend only on the fields of `CapsuleContent` that a
-  distribution copies unchanged: `publishedAt`, `schemaVersion`, `values`,
-  `metadata` and `payload`; never on `license` or on `distributor`.
+- The commitment MUST be stable across instances with the same parameters.
+  It and the verdict of `Verifier_Verify` MUST depend only on the fields of
+  `CapsuleContent` that a distribution copies unchanged: `publishedAt`,
+  `schemaVersion`, `values`, `metadata` and `payload`; never on `license`
+  or on `distributor`.
+- Between them, the two verdicts MUST bind every copied field but
+  `metadata`: `Verifier_VerifyRound` those the commitment covers,
+  `Verifier_Verify` the rest, each derived from the signed data or fixed by
+  a parameter of the verifier. `metadata` is the capsule signatory's
+  annotation, unsigned as in the Data Standard and unverified. A consumer
+  that checks the round alone can rely on the fields the commitment covers
+  and on no other.
 - Two instances with the same template and parameters MUST give the same
   verdicts, which is what lets a consumer verify against an instance of
   its own.
@@ -307,19 +320,23 @@ included, fail on `Failed` and record `attestation` in the round, so that a
 round on the ledger always passes the check; fail while `isPaused`; create the
 root capsule with `content` unchanged, signed by the operator, with the
 operator as `distributor`; and fail unless `content.license` is a license of
-this definition owned by the operator. The authority to sign the round and the
-root capsule MUST flow from the head, not from the caller, so that publication
-is open to any party the implementation admits. The head carries the latest
-round's number and fixing time itself, so a publication depends on no round's
-existence and retiring one never stops the chain. Who signs the head and the
-rounds, how publication is paused and who observes the root capsule are left
-open.
+this definition owned by the operator and signed by it. The authority to sign
+the round and the root capsule flows from the head, not from the caller, so
+that publication is open to any party the implementation admits. The head
+carries the latest round's number and fixing time itself, so a publication
+depends on no round's existence and retiring one never stops the chain. An
+observer of the head is an informee of every publication, since the head is
+consumed, and witnesses the root capsule with it: the head's observers MUST be
+within the root capsule's audience, and the readers observe the rounds, not the
+head. Who signs the head and the rounds, how publication is paused and who
+observes the root capsule are left open; a reader that is to tell a pause from
+an outage is told by a contract of its own, since it does not see the head.
 
 #### 3.4 `Round`
 
 The immutable, price-free record of one fixing. A consumer reads it from
-its own participant and passes the view to `Verifier_VerifyRound`; it is
-never fetched inside a consumer's transaction.
+a participant hosting the reader and passes the view to
+`Verifier_VerifyRound`; verification never fetches it.
 
 ```haskell
 data RoundView = RoundView with
@@ -336,17 +353,29 @@ data RoundView = RoundView with
 ```haskell
 choice Round_Archive : ()   -- consuming
   with actor : Party
+
+nonconsuming choice Round_Fetch : RoundView
+  with
+    actor : Party
+    signatories : [Party]   -- the parties the caller requires of the round
 ```
 
-A round MUST be created only by `RoundHead_CreateRound`, except round 0,
-the genesis round, which the bootstrap of a definition creates with an
-empty commitment and no capsule. A round's view MUST NOT change. Rounds
-MUST be visible to the readers and MUST NOT carry the data. A round MUST
-be archived only by `Round_Archive`, whose authority flows from the round
-and which MUST refuse any actor the implementation does not admit; the
-reference implementation admits the operator alone. A round SHOULD outlive
-every capsule of its number; when it may go is an archiver's rule, not the
-standard's.
+A round MUST be created only by `RoundHead_CreateRound`, except round 0, the
+genesis round, which the bootstrap of a definition creates with an empty
+commitment and no capsule. A round's view MUST NOT change. Rounds MUST be
+visible to the readers and MUST NOT carry the data. A round MUST be archived
+only by `Round_Archive`, whose authority flows from the round and which MUST
+refuse any actor the implementation does not admit; the reference
+implementation admits the operator alone. It consumes the round, so the
+round's observers witness everything beneath it, and an implementation MUST
+NOT do there anything the readers may not see. A round SHOULD outlive every
+capsule of its number; when it may go is an archiver's rule, not the
+standard's. `Round_Fetch` returns the view inside a transaction to any party
+that can see the round, by observation or by explicit disclosure, and fails
+unless the round's signatories are exactly the `signatories` the caller
+names, the parties that sign the feed's rounds, so that a caller cannot name
+fewer than sign the chain. The round's signatories confirm the exercise and
+learn of it, its observers do not.
 
 #### 3.5 `License`
 
@@ -454,8 +483,8 @@ contract a consuming exercise archives. The rules follow.
    verification. The consumer creates an instance from the same template
    with the same parameters and itself as signatory; by 3.2 the verdicts
    are the same.
-3. **A consumer reads its round from its own participant.** As an observer
-   it has the view without any transaction.
+3. **A consumer reads its round from a participant hosting the reader.**
+   As an observer the reader has the view without any transaction.
 4. **Distribution by view is private; by id is not.** `ByView` passes the
    source as data and informs the owner and the new capsule's clients
    only, plus the delegate's informees if the license names one. `ById`
@@ -463,10 +492,28 @@ contract a consuming exercise archives. The rules follow.
    distribution.
 5. **Nothing on the consumption path touches a contract the operator
    signs.** The operator is informed of a round's existence, which it
-   created, and of nothing downstream.
-6. **Disclosure informs the recipient only.** A publisher that is not a
-   reader can be shown the contracts a publication touches; a client can be
-   shown the license a capsule names. Neither creates a ledger event.
+   created, and of nothing downstream. The one exception is the consumer's
+   own choice: a transaction that exercises `Round_Fetch` informs the
+   round's signatories (section 5).
+6. **Disclosure informs the recipient only.** A publisher that does not
+   observe the head can be shown the contracts a publication touches; a
+   client can be shown the license a capsule names. Neither creates a
+   ledger event.
+7. **An observer of a consumed contract witnesses the exercise in full.**
+   The head's observers see every publication, root capsule included
+   (3.3); a round is consumed only by `Round_Archive`, and an
+   implementation MUST NOT do beneath it anything the readers may not see
+   (3.4).
+8. **Stakeholders see each other.** Every stakeholder of a contract sees
+   its full signatory and observer lists, and the hosting of a party is
+   visible to the whole synchronizer. A deployment SHOULD make the readers
+   one public party, multi-hosted with observation permission on
+   participants that no consumer operates, and SHOULD distribute one
+   capsule per client. A consumer reads the rounds as that party and
+   passes their views to its verifier; inside a transaction it reaches a
+   round disclosed to it through `Round_Fetch`, a plain fetch being open
+   to stakeholders only. A deployment MAY name consumers as readers
+   directly where the list of them is not confidential.
 
 ![Who is informed of a publication, a distribution and a verification: the
 operator and the auditors of the first, the distributor and its clients of
@@ -484,11 +531,16 @@ A consumer accepts a capsule only after:
    the capsule's view MUST return `Verified`.
 2. **Canonicality.** `Verifier_VerifyRound` with the capsule's view and the
    view of the round of the capsule's number for the capsule's definition MUST
-   return `Passed`. A reader takes the view from its own participant. A
-   consumer that cannot read the round, because it is not a reader or because
-   the check runs inside a choice another party exercises, takes the view the
-   presenter hands over next to the capsule; where the verifier names no
-   attestation keys, such a consumer SHOULD NOT accept the capsule.
+   return `Passed`. A consumer that reads as a reader takes the view from a
+   participant hosting the reader. A consumer that cannot read the round,
+   because it is not a reader or because the check runs inside a choice
+   another party exercises, takes the view the presenter hands over next to
+   the capsule; where the verifier names no attestation keys, such a
+   consumer SHOULD NOT accept the capsule. A transaction that is to rest
+   on the ledger's own round takes the view through `Round_Fetch` (below).
+   A presentation outside the ledger MUST carry the capsule's view and the
+   round's view, attestation included; its transport is outside the
+   standard.
 3. **Freshness.** `Verifier_VerifyFreshness` with the time the consumer
    cares about MUST return `Passed`, or the consumer applies a policy of
    its own to `publishedAt`.
@@ -505,15 +557,27 @@ A consumer accepts a capsule only after:
 A consumer that uses a capsule in a transaction with other parties performs the
 authenticity, canonicality and freshness checks inside that transaction: every
 informee's participant re-executes them, so counterparties need not trust the
-consumer's reading of authenticity and freshness. Inside the transaction
-canonicality carries over only through the attestation: the `RoundView` is an
-argument the submitter supplies, and nothing inside the transaction ties it to
-a `Round` on the ledger, so a counterparty that re-executes
+consumer's reading of authenticity and freshness. Where the `RoundView` is an
+argument the submitter supplies, canonicality carries over only through the
+attestation: nothing inside the transaction ties the view to a `Round` on the
+ledger, so a counterparty that re-executes
 `Verifier_VerifyRound` learns that the view and the capsule agree and, where
 the feed attests its rounds, that the key holder designated that content for
 that round number. Outside the transaction, a counterparty that reads the round
 compares the view with it before it consents; one that consented in advance, to
-a choice the other may exercise alone later, relies on the attestation.
+a choice the other may exercise alone later, relies on the attestation. Taking
+the view inside the transaction through `Round_Fetch`, on a round the submitter
+observes or was disclosed and with the parties that sign the feed's rounds
+named, ties it to the ledger itself, at a cost: the round's signatories confirm
+the exercise, so the settlement depends on their participants, and they learn
+who used which round and when.
+
+The checks establish that a capsule is the content of its round and that the
+round is fresh, not that it is the round a transaction was meant to use:
+freshness admits every round of its window. A contract that lets one party
+settle on a capsule SHOULD fix the round by a rule its parties agreed, a round
+number, a fixing time, or the first round fixed at or after a time, and hold
+the round's view to it.
 
 ### 6. The publisher's procedure
 
@@ -594,18 +658,18 @@ settlement contract needs to know is in the views and the choices. A
 deployment may replace any template of the reference implementation and
 remain conforming. The price is that the interface package is frozen for
 its version; the executable code is kept out of it so that it can be
-upgraded.
+upgraded, the check of signatories in `Round_Fetch` aside.
 
 **Views, never contract ids, on the verification path.** This is the
 single rule from which the privacy guarantee follows. A verifier that
 fetched the capsule or the round would inform their signatories, which
 include the operator, of every verification. Passing the views as data
-costs the consumer nothing: it is an observer of both and already holds
-them. The same reasoning gives distribution by view as the private option,
-and the rule that a distribution informs its clients and, by default,
-nobody else is the principle the Token Standard V2 (CIP-0112) states for
-settlement choices: the set of informees only ever decreases along the
-chain.
+costs the consumer nothing: it observes the capsule, reads the round as the
+readers party, and already holds both. The same reasoning gives
+distribution by view as the private option, and the rule that a
+distribution informs its clients and, by default, nobody else is the
+principle the Token Standard V2 (CIP-0112) states for settlement choices:
+the set of informees only ever decreases along the chain.
 
 **A consumer's own verifier instance.** The canonical instance a
 definition names is the reference the consumer copies its parameters from,
@@ -617,17 +681,38 @@ checks run inside a multi-party settlement.
 **A commitment in the round, not the data.** Readers of the rounds learn
 that a fixing happened and when, and can check any capsule against it,
 without receiving the data. The round is the canonical anchor every reader
-shares; the data goes only where it is licensed to go. The requirement that the
-commitment cover exactly what a distribution copies unchanged is what makes
-a redistributed capsule verify against the same round as the root.
+shares; the data goes only where it is licensed to go. The requirement that
+the commitment depend only on what a distribution copies unchanged is what
+makes a redistributed capsule verify against the same round as the root;
+what the commitment leaves out, the authenticity check binds to the signed
+data or fixes, metadata excepted.
+
+**Readers as one party.** Stakeholders of a contract see each other, so a
+round observed by every consumer would hand each of them the list of the
+others, which for some feeds, a fund's net asset value for one, is a list
+of who is exposed to it. The reference deployment names one readers party,
+a public party
+[multi-hosted](https://docs.canton.network/appdev/deep-dives/multi-hosting)
+on
+[observing participant nodes](https://docs.canton.network/overview/reference/external-party)
+that consumers do not operate, since the hosting of a party is
+[broadcast to the whole synchronizer](https://docs.canton.network/overview/reference/topology);
+consumers read the rounds as that party, from more than one host where a
+single host is not to be trusted, and pass the views to their verifiers.
+A round a host makes up fails the attestation where the feed attests its
+rounds, and where it does not only a second host tells; a round it
+withholds, a second host reveals. A fetch is open to stakeholders only,
+which such a consumer is not, so the round carries a choice, `Round_Fetch`,
+that returns its view to whoever was disclosed it. The alternatives each
+cost a stated goal: the attestation alone gives up the check against the
+ledger, one round per consumer multiplies the signatories' contracts by the
+number of consumers, one definition per consumer gives up the shared
+fixing.
 
 **An attestation in the round.** Re-execution carries authenticity and
 freshness to every party of a transaction, since both are functions of the
 capsule; it cannot carry canonicality, since the round view is the submitter's
-argument. Fetching the round would tie the view to the ledger, but the round's
-signatories confirm a fetch and learn of it, which puts the oracle's
-participants on the settlement path and lets its operator see who settles on
-which round. The standard instead lets the data producer sign the round number
+argument. The standard therefore lets the data producer sign the round number
 and the commitment, so that a party without the round checks, as data, that the
 producer designated that content for that number; the round's signatories are a
 fact of the ledger, not data a view carries. The producer signs one candidate
@@ -636,7 +721,11 @@ equivocation, provable by anyone holding both, and the only thing the
 attestation does not exclude. Several authentic aggregates can exist for one
 fixing time, which is why a round, and the producer's choice among them, exist
 at all; a consumer that wants no such choice pins the oracle's full node set as
-its quorum, at the cost of liveness.
+its quorum, at the cost of liveness. For the settlement that must exclude
+equivocation, `Round_Fetch` ties the view to the ledger, as the last resort:
+the round's signatories confirm it and learn of it, which puts the oracle's
+participants on the settlement path and lets its operator see who settles on
+which round.
 
 **Lineage to the fixing, not to the path.** Every capsule is anchored to
 the round of its number: a consumer proves that the content is the one
@@ -652,7 +741,8 @@ elsewhere.** That a child cannot assert rights its parent does not hold is
 enforced by the ledger at the points where a choice is involved: a
 sublicense can be created only by a party the parent
 entitles, a license's licensees are fixed for its life, the root capsule's
-audience is the root license's licensees, and a license that names a
+audience is the root license's licensees and, in the reference
+implementation, the auditors, and a license that names a
 delegate calls it in the same transaction as every distribution. What the
 ledger cannot enforce is that a capsule or a license was created through a
 choice at all: a template signed by one party is always directly
@@ -681,9 +771,10 @@ touches the contract. Confirmation is validation, not consent: a
 participant cannot refuse a valid transaction, only be unavailable. The
 standard therefore leaves the signatories open and the reference
 implementation chooses co-signature by every auditor: the ledger excludes
-a fork of the chain, at the cost that an auditor's outage stops
-publication, which multi-hosting the auditors' parties addresses in
-topology. The alternatives are documented with the reference
+a fork of the chain, as long as an auditor is independent of the operator,
+at the cost that an auditor's outage stops publication, which
+multi-hosting the auditors' parties addresses in topology. The
+alternatives are documented with the reference
 implementation: auditors as observers who acknowledge rather than co-sign,
 with a consumer-side check (a fork becomes detectable rather than
 excluded); a subset of co-signers with
@@ -762,11 +853,13 @@ signed by RedStone oracle nodes, verified by the RedStone Daml SDK, and
 own envelope, verified by its codecs), an extended set of license kinds and
 an accounting delegate as examples of extensions, archivers for capsules
 and for rounds that apply one retention rule, and a Daml Script test suite
-covering bootstrap, publication and its rejections, the race on the head,
-pause, distribution by view and by id, sublicensing, revocation, round
-retirement and every visibility claim of section 4. The
+covering bootstrap, publication and its rejections, the round attestation,
+the race on the head, pause, distribution by view and by id, sublicensing,
+revocation, round retirement, a settlement held to an agreed fixing and
+every visibility claim of section 4. The
 documentation includes the full specification, the data model, consumer
-and implementer guides, the governance variants and the threat model.
+and implementer guides, the handoffs outside the ledger, the governance
+variants, the costs of a deployment and the threat model.
 
 Interface package hash at the tag: TODO.
 
@@ -785,5 +878,7 @@ licensed under Apache-2.0.
 - 2026-11-03: round attestation, in the round view, the publisher's procedure
   and the canonicality check; section 5 on what a multi-party transaction
   carries; sections 6 and 8 and the rationale on the attestation.
+- 2026-11-18: the readers party, `Round_Fetch`, the rule on signatories,
+  which round a settlement uses, and Canton Data Standard 0.3.0.
 
 [repo]: https://github.com/redstone-finance/canton-access-privacy-standard-public

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="396" viewBox="0 0 1000 396" role="img">
 <title>Who is informed of a publication, a distribution and a verification</title>
-<desc>Three transactions of the reference implementation: what each uses, what it creates and who Canton informs. A publication informs the operator, the auditors, the readers and the licensees; a distribution by view informs the distributor and its clients only; a verification informs the consumer alone.</desc>
+<desc>Three transactions of the reference implementation: what each uses, what it creates and who Canton informs. A publication informs the operator, the auditors and the head's observers in full, the licensees of the root capsule and the readers of the round alone; a distribution by view informs the distributor and its clients only; a verification informs the consumer alone.</desc>
 <style>
 text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; dominant-baseline: central; text-anchor: middle; }
 .th { font-size: 14px; font-weight: 500; }
@@ -35,9 +35,11 @@ rect { stroke-width: 0.5; }
 <text class="ts" x="555.0" y="103.5">and the root capsule</text>
 </g>
 <line x1="708" y1="95" x2="734" y2="95" class="arr" marker-end="url(#arrow)"/>
-<g class="signed"><rect x="740" y="60" width="220" height="70" rx="8"/>
-<text class="ts" x="850.0" y="86.5">the operator, the auditors,</text>
-<text class="ts" x="850.0" y="103.5">the readers, the licensees</text>
+<g class="signed"><rect x="740" y="52" width="220" height="86" rx="8"/>
+<text class="ts" x="850.0" y="71.0">the operator, the auditors,</text>
+<text class="ts" x="850.0" y="87.0">the head's observers;</text>
+<text class="ts" x="850.0" y="103.0">the licensees, of the capsule;</text>
+<text class="ts" x="850.0" y="119.0">the readers, of the round alone</text>
 </g>
 <text class="band" x="40" y="204">2. Distribution</text>
 <text class="note" x="40" y="224">by a licensee D1</text>
