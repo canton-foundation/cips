@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Build Configuration",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string" },
+    "build_id": { "type": "string" },
+    "package_version": { "type": "string" },
+    "build_timestamp": { "type": "string", "format": "date-time" },
+    "daml_sdk_version": { "type": "string" },
+    "daml_sdk_hash": {
+      "type": "object",
+      "properties": {
+        "algorithm": { "type": "string" },
+        "value": { "type": "string" }
+      },
+      "required": ["algorithm", "value"]
+    },
+    "ghc_version": { "type": "string" },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "os": { "type": "string" },
+        "os_version": { "type": "string" },
+        "architecture": { "type": "string" }
+      },
+      "required": ["os", "os_version", "architecture"]
+    },
+    "source_hash": {
+      "type": "object",
+      "properties": {
+        "algorithm": { "type": "string" },
+        "value": { "type": "string" }
+      },
+      "required": ["algorithm", "value"]
+    },
+    "build_script": { "type": "string" },
+    "build_flags": {
+      "type": "object",
+      "properties": {
+        "optimize": { "type": "boolean" },
+        "enable_tests": { "type": "boolean" },
+        "additional_options": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["optimize", "enable_tests", "additional_options"]
+    },
+    "verification_instructions": { "type": "string", "format": "uri" },
+    "build_artifacts_hash": {
+      "type": "object",
+      "properties": {
+        "algorithm": { "type": "string" },
+        "value": { "type": "string" }
+      },
+      "required": ["algorithm", "value"]
+    }
+  },
+  "required": [
+    "schema_version",
+    "build_id",
+    "package_version",
+    "build_timestamp",
+    "daml_sdk_version",
+    "daml_sdk_hash",
+    "ghc_version",
+    "environment",
+    "source_hash",
+    "build_script",
+    "build_flags",
+    "verification_instructions",
+    "build_artifacts_hash"
+  ]
+}
