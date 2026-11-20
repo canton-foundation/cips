@@ -75,8 +75,10 @@ cip-<nr>/id:nft/<collectionId>/<tokenId>
 `collectionId` names a collection under the registry party, and `tokenId`
 names one item in that collection. The registry assigns both, and both MUST
 be non-empty. `collectionId` MUST NOT contain `/`, so the id splits at the
-first `/` after the prefix; `tokenId` MAY contain `/`. Ids are compared as
-UTF-8 bytes. Example: `cip-<nr>/id:nft/posters/7`. The prefix tells a reader
+first `/` after the prefix; `tokenId` MAY contain `/`. The registry checks
+this when it builds an id from its parts: once built, the id of collection
+`a/b` and token `1` is also the id of collection `a` and token `b/1`. Ids are
+compared as UTF-8 bytes. Example: `cip-<nr>/id:nft/posters/7`. The prefix tells a reader
 where the format is defined. Transfer, lock, and any recreation of the
 holding MUST preserve the instrument id. Burn and revocation end the item.
 
@@ -90,25 +92,37 @@ its own.
 
 #### Uniqueness
 
-A registry SHOULD NOT have two active holdings of the same instrument. The
-registry MAY declare how it upholds this in `NftView.uniqueness`:
+A registry MUST NOT have two active holdings of the same instrument
+(section 4). It MAY declare how it upholds this in `NftView.uniqueness`:
 
 | Value | Meaning |
 | ----- | ------- |
-| `enforced` | Issuance MUST fail on-ledger if the instrument already has an active holding. |
+| `enforced` | Issuance MUST fail on-ledger if the instrument already has an active holding, checked against a uniqueness record that the registry and its operators sign. |
 | `policy` | The check is an off-ledger registry undertaking. |
 
-If `uniqueness` is absent, no claim is made. A per-collection contract that
-records live ids, read and updated by the issuing choice, is one way to
-enforce it. A `tokenId` MAY be issued again after the earlier item was
+If `uniqueness` is absent, no claim is made about how. A per-collection
+contract that records ids, read and updated by the issuing choice, is one
+way to enforce it. A record of live ids lets an id be issued again after
+its item is burned or revoked; a record of every id issued, as in the
+reference implementation, never issues one twice. Canton has no contract
+keys, so the ledger cannot prove that a registry keeps only one such
+record; operator signatures make
+a second record visible to the operators (security consideration 1). A
+registry SHOULD fix a collection's uniqueness when it first issues in it, so
+that every item of the collection declares the same value; otherwise an item
+declared `policy` could duplicate an id the record holds. A `tokenId` MAY be issued again after the earlier item was
 burned or revoked; the new holding is a new item, and applications identify
 a live item by its active holding.
 
 #### Identifier privacy
 
-`instrumentId.id` and the instrument entry's `name` and `symbol` are public.
-They MUST NOT contain personal data or an identifier of a holder or account.
-A `tokenId` MAY name the item (a serial, a title, a domain name).
+`instrumentId.id` and the instrument entry's `name` and `symbol` reach every
+party the item is shared with, and they are public when the registry lists
+the item (section 9). They MUST NOT contain personal data or an identifier
+of a holder or account. A `tokenId` MAY name the item (a serial, a title, a
+domain name). For an item the registry does not list, the `tokenId` SHOULD
+be unguessable unless the registry answers a lookup only for callers it
+has authorized to read that item (section 9).
 
 ### 4. Instruments and holdings
 
@@ -131,7 +145,10 @@ reported in `NftView.mode`.
 In transferable mode the registry MUST expose the CIP-0112 transfer
 factory, and the CIP-0112 allocation factory if allocation is supported.
 Delivery versus payment uses the CIP-0112 allocation flow; each item
-appears as amount `1.0` on its leg. A transferable item SHOULD also
+appears as amount `1.0` on its leg. Each allocation settles its own account,
+so the registry carries the item's content from the sender's allocation to
+the receiver's: the receiver's holding MUST keep the instrument id, `meta`,
+and `Nft` view, as after a transfer. A transferable item SHOULD also
 implement the CIP-0056 V1 interfaces, as CIP-0112 section 5.1 recommends,
 so it trades on venues and wallets that support only V1.
 
@@ -149,11 +166,13 @@ only burns succeed: a wallet that reads `NftView.mode` SHOULD offer no
 transfer of a soulbound item other than a burn, and one that does not may
 offer a transfer the registry then refuses.
 
-Every change to an item's holding, including a mint, transfer, burn,
-revocation, or a content change that recreates it, MUST be reported as
-CIP-0112 section 5.1 requires for any holding: exactly one
-`EventLog_HoldingsChange` event (`splice-api-token-transfer-events-v2`)
-for each holding created or archived.
+Every change to an item's holding, including a mint, transfer, settlement,
+burn, revocation, or a content change that recreates it, MUST be reported as
+CIP-0112 section 5.1 requires for any holding: each create and each
+archive of a holding is represented in exactly one
+`EventLog_HoldingsChange` event (`splice-api-token-transfer-events-v2`),
+an event of that holding's account. A holding created and archived in the
+same transaction is reported for both.
 
 ### 6. Issuance and revocation
 
@@ -189,8 +208,8 @@ the `image` of the document at
 
 `cip-<nr>/nft-*` keys not defined here are reserved
 for later versions of this profile and SHOULD NOT be written. Keys under
-other prefixes are free, following the CIP-0056 prefix rule. Transfer and
-lock MUST copy `meta` unchanged.
+other prefixes are free, following the CIP-0056 prefix rule. Transfer,
+allocation, and lock MUST copy `meta` unchanged.
 
 A registry MAY change an item's content by recreating its holding, as it
 can for any holding. This profile does not require it to let the owner do
@@ -258,24 +277,44 @@ the template's views, with no further implementation code.
 
 ### 9. Privacy and listing
 
-CIP-0056 registry metadata is public: `GET /registry/metadata/v1/instruments`
-lists every instrument, and therefore every item. It discloses how many
-items a collection has, not who holds them. Reading one item does not
-need the listing: a wallet reads its own items through the Ledger API, and
-anyone can look up one instrument with
+An item is private unless its registry lists it. Each item is its own
+instrument (section 4), so a list of a registry's instruments is a list of
+its items: it discloses that each item exists, how many items a collection
+has, and their token ids. Active holdings SHOULD be visible only to the
+owner, the account provider, the registry, any operator signatory, and the
+parties CIP-0112 requires for locks and pending instructions. Holder
+enumeration is out of scope.
+
+#### Listing and lookup
+
+A registry is not required to return an item from
+`GET /registry/metadata/v1/instruments`, and SHOULD list only items it means
+to be publicly discoverable, such as a collection offered on venues. The
+listing pages but has no filter, so a reader browsing one collection pages
+through every listed item of the registry. The id prefix
+`cip-<nr>/id:nft/<collectionId>/` is a natural filter for a later revision
+of the metadata API.
+
+Reading one item does not need the listing. A wallet reads its own items
+through the Ledger API and looks up each instrument with
 `GET /registry/metadata/v1/instruments/{instrumentId}`, percent-encoding
-the id because it contains `/`. Browsing a collection does: the listing
-pages but has no filter, so a reader pages through every item of the
-registry. The id prefix `cip-<nr>/id:nft/<collectionId>/` is a natural
-filter for a later revision of the metadata API. Active holdings SHOULD be
-visible only to the owner, the account provider, the registry, any
-operator signatory, and the parties CIP-0112 requires for locks and pending
-instructions. Holder enumeration is out of scope.
+the id because it contains `/`. A registry SHOULD answer that lookup
+whether or not it lists the item, so wallets can read `decimals` and
+`supportedApis`. An unlisted item's id is known only to the holding's
+stakeholders and the parties they share the item with, and it protects the
+entry as a contract id protects the other CIP-0056 registry endpoints. A
+registry MAY instead answer a lookup only for callers it has authorized to
+read that item. Authenticating the caller is not enough: another
+authenticated caller could still probe a guessable id. Such a registry
+MUST answer any other caller the same way whether or not the item exists,
+or the refusal itself confirms a guessed id. CIP-0056
+standardizes no authentication scheme, so wallets that do not support the
+registry's own cannot read the entry.
 
 #### Sharing an item
 
-The public instrument listing shares an item's existence and identity. It
-does not share a holding. To show a holding to a party that is not a
+Listing an item shares its existence and identity. It does not share a
+holding. To show a holding to a party that is not a
 stakeholder, a stakeholder hands them the holding's created event, sent
 off-ledger. The event MUST carry its created-event blob and the computed
 `Holding` and `Nft` interface views: the stakeholder requests them
@@ -318,7 +357,9 @@ profile; it would widen visibility beyond the parties listed above.
 | Interchangeable copies as a balance greater than one | Not this profile. One CIP-0056 instrument with `decimals = 0` and amount equal to the supply. |
 | Ticket redeemed | Burn the ticket, or issue a soulbound pass at the door. |
 | Membership, badge, or a credential the holder shows as an item | Soulbound. `revocable` set if the issuer may cancel. |
-| A claim about a party that an app only checks, such as a published service URL or eligibility to hold an asset | Not this profile. |
+| An attestation about a party that an app only checks and that has no economic terms or lifecycle of its own, such as a published service URL or eligibility to hold an asset | Not this profile. |
+| License or entitlement that the registry issues, amends, and revokes, such as a data license | Soulbound, `revocable` set, `uniqueness` `enforced`. The licensee is the owner and signs nothing; only the registry revokes the license or changes its terms. Terms change by recreating the holding (section 7). |
+| Item whose existence is confidential | Not listed (section 9). |
 | License or domain reissued under the same id after burn | Permitted. Applications identify the live item by its active holding. |
 | Issuer inventory, later sold | Mint to the registry's own party, then transfer. |
 | Lost key | Revoke, then issue a new item that carries `supersedes`. |
@@ -369,8 +410,9 @@ transfer or allocation leg names an instrument and an amount, not an
 item: if several items shared one instrument, a wallet that is not
 NFT-aware could move the wrong holding, and CIP-0112 net settlement could
 complete a 1.0-for-1.0 exchange with no holdings moving. The cost is that
-the public instrument list shows every item, including how many items a
-collection has and their token ids.
+a registry's instrument list would show every item, including how many
+items a collection has and their token ids. Listing is therefore the
+registry's choice (see "Private by default").
 
 ### Identity in the instrument id
 
@@ -395,10 +437,27 @@ Revocation and content changes stay on the template.
 
 A soulbound item is a holding. It has an instrument, an amount of `1.0`,
 content a wallet renders, and an identity that issuance, burn, and
-revocation act on. Use this profile when the item must appear in the
-holder's wallet as an asset, such as a certificate of a registered
-position. A fact an application only checks, such as eligibility to hold
-an asset, is outside this profile.
+revocation act on. Use this profile when the thing is an item in its own
+right: it is issued to an owner, appears in that owner's wallet as an
+asset, and is amended or revoked as one unit. A certificate of a registered
+position and a license with its own terms are examples. An attestation
+about a party that an application only checks and that has no economic
+terms or lifecycle of its own, such as eligibility to hold an asset, is
+outside this profile.
+
+### Private by default
+
+CIP-0056 expects registry metadata to be public, and its metadata API
+describes `listInstruments` as listing every instrument of the registry.
+That fits fungible assets, where an instrument is an asset class and the
+list says nothing about holdings. Under this profile each item is its own
+instrument with a supply of 0 or 1, so the list enumerates holdings, which
+CIP-0056 shares on a need-to-know basis. A registry of certificates or
+licenses often cannot publish how many it has issued. Listing is therefore
+a disclosure the registry chooses. Lookup by id stays open because CIP-0056
+already protects its other registry endpoints with identifiers that are
+hard to guess, and a wallet never needs the list: it reads holdings from
+the Ledger API and looks up each instrument by id.
 
 ### The metadata key prefix
 
@@ -446,15 +505,24 @@ existing CIP-0112 holding adopts the profile by meeting sections 3 to 9.
 ## Backwards compatibility
 
 The profile adds one interface package to the token-standard packages and
-changes nothing in CIP-0056, CIP-0112, or any deployed asset. A V1-only
-holding does not
+changes nothing in CIP-0056, CIP-0112, or any deployed asset. A registry
+that leaves its items out of `listInstruments` departs from the CIP-0056
+expectation that registry metadata is public (see "Private by default"). A
+V1-only holding does not
 conform. V1 wallets see a conforming asset when the CIP-0112 section 5.1
 interfaces are implemented.
 
 ## Reference implementation
 
-A Daml reference implementation (`NftApi`, `NftReference`) will ship with
-the conformance suite of section 11 once reworked onto CIP-0112.
+The Daml reference implementation is built on CIP-0112. It has the `Nft`
+interface package, a reference registry, a soulbound certificate built on
+the profile, and the conformance suite of section 11. The registry covers
+mint offers, transfers in one or two steps (V2 and V1), allocations settled
+in batches, soulbound items, burns, revocation, content changes, and
+enforced uniqueness. The suite is not complete yet: it does not cover
+iterated settlement, allocations of mints and burns, or holdings created
+and archived in one transaction. It will be completed and published with
+built packages before this CIP is `Final`.
 
 ## Security considerations
 
@@ -468,6 +536,11 @@ the conformance suite of section 11 once reworked onto CIP-0112.
 3. **Registry authority.** A set `revocable` flag means the registry can
    burn the item without the owner's signature. Buyers of such items trust
    the registry with that power.
+4. **Unlisted items.** Leaving an item out of the listing hides it from
+   enumeration, not from a party that learns its id. A registry that
+   answers a lookup without checking that the caller may read that item,
+   or that refuses differently for an item that exists and one that does
+   not, confirms a guessed id (sections 3 and 9).
 
 ## References
 
