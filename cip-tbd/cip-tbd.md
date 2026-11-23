@@ -62,7 +62,9 @@ A descriptor is represented as a JSON schema and consists of the following compo
 | `display` | Yes | Defines how supported operations are presented. |
 | `signature` | No* | Carries integrity and authenticity information. |
 
-\* Whether a signature is required for publication, acceptance, or a given trust level is defined by the trust model.
+*Whether a signature is required for publication, acceptance, or a given trust level is defined by the trust model.*
+
+The following is an illustrative structural example, not a finalized schema:
 
 ```json
 {
@@ -172,6 +174,8 @@ An `interpolatedIntent` MAY embed values with `{path}` placeholders. Each placeh
 | none | Fields of the matched operation: create arguments or exercise arguments. |
 | `@` | The prepared transaction. On an exercise node, `@.contract` refers to the create arguments of the exercised contract. |
 | `$` | Descriptor metadata, definitions, and constants. |
+
+For example:
 
 ```json
 {
@@ -320,17 +324,6 @@ Verification and publisher trust are separate decisions:
 | Unavailable | Unknown | Integrity or publisher cannot be verified. |
 
 Trust MAY come from a curated registry, trusted publisher keys, or a user decision. A referenced descriptor is a separate trust decision. Key rotation, revocation, and compromise handling require an explicit policy.
-
-#### Discovery and distribution
-
-Discovery is independent of the descriptor format. No single channel is required. Finding a descriptor does not make it trusted. Verification does.
-
-| Mechanism | Purpose |
-| --- | --- |
-| Registry | Index and discover descriptors. |
-| Publisher endpoint | Retrieve descriptors from their publishers. |
-| Application bundle | Ship descriptors with Daml packages or applications. |
-| Wallet store | Cache or manage descriptors locally. |
 
 ### Compatibility
 
@@ -510,6 +503,18 @@ The following items came out of the proof of concept. They are outside the initi
 | Contract reference resolution | Optional in the initial version. See Contract ID references. |
 | Display format references | A `display.format` section that other display definitions can reference. |
 | Verifiable provenance | Signature canonicalization, hashing, algorithms, and encoding. See Signature model. |
+| Discovery and distribution | How descriptors are published and retrieved. No channel is part of the initial version. |
+
+### Discovery and distribution
+
+Discovery is independent of the descriptor format. No single channel is required. Finding a descriptor does not make it trusted. Verification does.
+
+| Mechanism | Purpose |
+| --- | --- |
+| Registry | Index and discover descriptors. |
+| Publisher endpoint | Retrieve descriptors from their publishers. |
+| Application bundle | Ship descriptors with Daml packages or applications. |
+| Wallet store | Cache or manage descriptors locally. |
 
 ## References
 
