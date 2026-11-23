@@ -1,9 +1,9 @@
-# CIP-0103: dApp Standard
+# CIP-XXXX: Clear Signing
 
 <pre>
  CIP: TBD
  Title: Clear Signing
- Author: Digital Asset (Marc Juchli)
+ Author: Marc Juchli (Digital Asset)
  Status: Draft
  Type: Standards Track
  Created: 2026-11-23
@@ -14,6 +14,11 @@
 
 ## Abstract
 
+This proposal defines a **Clear Signing Descriptor**: a machine-readable format that maps a Canton template and its choices to human-readable intent, typed fields, and deterministic display instructions.
+
+A wallet applies the descriptor to a prepared transaction and presents what the user is authorizing, instead of package identifiers, choice names, and raw arguments. Displayed values are taken from the transaction. The descriptor does not change transaction semantics, authorize operations, or replace cryptographic verification.
+
+The format follows [ERC-7730](https://eips.ethereum.org/EIPS/eip-7730), adapted to Canton’s Daml-LF model of creates, exercises, nested nodes, and contract references.
 
 ## Copyright
 
@@ -21,45 +26,29 @@ This CIP is licensed under CC0-1.0: [Creative Commons CC0 1.0 Universal](https:/
 
 ## Motivation
 
-Canton transactions are prepared as structured transaction trees containing operations such as contract creation and choice exercise. Although this representation is machine-readable, its low-level structure is difficult for users to understand and verify before authorizing a transaction.
+Canton transactions are prepared as trees of contract creates and choice exercises. That representation is machine-readable, but wallets today parse and display it as package and template identifiers, contract IDs, choice names, and typed arguments. Users have to read implementation details in order to understand what they are authorizing.
 
-Today, wallets extract and display raw transaction data, including package and template identifiers, contract IDs, choice names, and typed arguments. This forces users to interpret implementation-level details to understand what they are authorizing.
+The Canton Clear Signing Descriptor is shared presentation metadata for one exact template. Wallets can apply it without built-in knowledge of every application. A raw exercise node can instead be shown as ”Transfer 100 CC to Alice”, with fields for the asset, amount, recipient, and relevant contract.
 
-The Canton Clear Signing Descriptor defines a machine-readable format that maps Canton templates and choices to human-readable intent, typed fields, and deterministic display instructions. It enables wallets to interpret prepared transactions consistently without requiring protocol-specific knowledge of every application.
-
-The design is inspired by ERC-7730, adapted to Canton’s Daml-LF transaction model, including contract creation, exercises, nested transaction nodes, and references to existing contracts.
-
-For example, instead of displaying a raw exercise node, a wallet could present ”Transfer 100 CC to Alice”, accompanied by detailed fields identifying the asset, amount, recipient, and relevant contract.
-
-The descriptor is separate from the transaction itself. It describes how transaction data should be presented; it does not change transaction semantics, authorize operations, or replace cryptographic verification.
+The descriptor is independent of any single wallet, transport, or transaction instance. It describes how to present a transaction. It does not decide whether the transaction is authorized, safe, or semantically correct.
 
 ## Specification
 
-### High Level Overview
+A descriptor binds display definitions to one template. Wallets match those definitions to a prepared transaction, derive every displayed value from that transaction, and fall back explicitly when a descriptor, operation, or field cannot be interpreted.
 
-The Canton Clear Signing Descriptor defines a machine-readable way to interpret Canton transactions for human review before signing. It maps Daml-LF template operations in a prepared transaction to human-readable intent and structured field representations, enabling wallets to present meaningful summaries instead of raw transaction data.
+### Definitions
 
-A descriptor is bound to an exact Canton template, identified by its package ID, module name, and entity name (known as template_id). It defines how to display contract creation and choice exercises, including stable intent descriptions, value-interpolated intent, and typed fields. Wallets apply these definitions to the actual prepared transaction, traversing all root nodes and nested operations.
+| Term | Definition |
+| --- | --- |
+| Descriptor | A JSON document that binds display definitions to one exact Canton template. |
+| Template identity | The tuple `packageId`, `moduleName`, `entityName` (`template_id`). All three components are required for a match. |
+| Prepared transaction | The transaction tree presented for signing, including create and exercise nodes, arguments, and metadata. It is the only source of displayed values. |
+| Wallet | Applies descriptors to a prepared transaction and presents the result for authorization. How a wallet is packaged is out of scope; interpretation and fallback behavior are not. |
+| Safe fallback | The presentation used when a descriptor, operation, field, or reference cannot be interpreted or trusted. The operation stays visible, and the limit of the interpretation is explicit. |
 
-A descriptor consists of five logical components:
+### Descriptor structure
 
-- Schema: Defines the descriptor structure and validation rules using JSON Schema.
-- Context: Identifies the exact Canton template to which the descriptor applies.
-- Metadata: Records the descriptor version, publisher, and provenance.
-- Display: Defines human-readable intent and typed field representations for supported operations.
-- Signature: Enables integrity verification and publisher authentication, subject to the wallet’s trust policy.
-
-Descriptors are independent of individual transaction instances, wallet implementations, and transport mechanisms. They can be distributed through different channels, provided their integrity and applicability can be verified. Shared definitions and composition may enable reuse across descriptors.
-
-The descriptor is presentation metadata, not transaction authority. It does not establish whether a transaction is authorized, safe, or semantically correct. Wallets must derive displayed values from the prepared transaction, validate descriptor applicability and trust, and never silently omit operations that cannot be interpreted. Missing, invalid, unsupported, or untrusted descriptors must result in a safe fallback that makes the limits of the interpretation clear.
-
-The following sections specify the descriptor format, display semantics, verification and trust model, resolution process, and wallet requirements.
-
-### Descriptor Structure
-
-A Canton Clear Signing Descriptor is a JSON document that binds display definitions to an exact Canton template and defines how supported operations are presented to users.
-
-The structure is inspired by ERC-7730, reusing its separation of schema, context, metadata, and display definitions where appropriate. Canton-specific extensions define template identity, operation matching, and descriptor integrity.
+The document separates schema, context, metadata, and display, as ERC-7730 does. Canton extensions cover template identity, operation matching, and integrity.
 
 #### Top-level structure
 
@@ -67,15 +56,13 @@ A descriptor is represented as a JSON schema and consists of the following compo
 
 | Field | Required | Purpose |
 | --- | --- | --- |
-| `$schema` | Yes | Identifies the JSON Schema version used to validate the descriptor. |
-| `context` | Yes | Binds the descriptor to an exact Canton template. |
-| `metadata` | Yes | Provides descriptor version, publisher, and provenance information. |
-| `display` | Yes | Defines human-readable representations for supported operations. |
-| `signature` | No* | Carries integrity and authenticity information for verification. |
+| `$schema` | Yes | Identifies the JSON Schema used to validate the descriptor. |
+| `context` | Yes | Binds the descriptor to one template identity. |
+| `metadata` | Yes | Records the descriptor version, publisher, and provenance. |
+| `display` | Yes | Defines how supported operations are presented. |
+| `signature` | No* | Carries integrity and authenticity information. |
 
-\* Whether signatures are mandatory for publication, acceptance, or particular trust levels is defined by the trust model.
-
-The following is an illustrative structural example, not a finalized schema:
+\* Whether a signature is required for publication, acceptance, or a given trust level is defined by the trust model.
 
 ```json
 {
@@ -104,83 +91,65 @@ The following is an illustrative structural example, not a finalized schema:
 
 The `$schema` field identifies the descriptor schema against which the document MUST be validated. Schema versioning is independent of the descriptor's own content version.
 
-A wallet MUST reject descriptors using an unsupported breaking schema version. Compatibility rules for additive changes and fixes MUST be defined by the schema's versioning policy.
+A wallet MUST reject a descriptor whose schema version is a breaking version it does not support. The schema’s versioning policy MUST define how additive changes and fixes are handled.
 
 #### Context
 
 The `context` field binds the descriptor to one exact Canton template, identified by the tuple:
-
 - `packageId`
 - `moduleName`
 - `entityName`
 
-All three values MUST match the template identity in the prepared transaction. Matching by module and entity name alone is insufficient because different packages may define templates with identical names.
-
-The context identifies the template being described; it does not identify a particular contract instance or authorize an operation.
+All three values MUST match the prepared transaction. Module and entity name alone are not sufficient, because different packages may reuse them.
 
 #### Metadata
 
 The `metadata` field provides information about the descriptor itself, including:
 
-- `version`: the descriptor content version, independent of `$schema`.
+- `version`: content version, independent of `$schema`.
 - `publisher`: the claimed publisher or author.
 - `name`: a human-readable descriptor name.
 - `url` or equivalent provenance fields, where applicable.
 
-Metadata is descriptive and MUST NOT be treated as trusted solely because it appears in the descriptor. Publisher authenticity depends on signature verification and the wallet's trust policy.
-
-Additional metadata, such as reusable constants or shared definitions, MAY be introduced by the schema where required by display formatting.
+Metadata MUST NOT be treated as trusted because it is present in the document. Publisher authenticity depends on signature verification and the wallet’s trust policy. The schema MAY add further metadata, such as constants or shared definitions, where display formatting needs them.
 
 #### Display
 
-The `display` field defines how supported operations are interpreted and presented. It contains separate definitions for the two operations: contract creation and choice exercise:
+The `display` contains one definition per operation kind:
+- `creates`: create operations and their constructor arguments.
+- `exercises`: exercise operations, keyed by exact choice name, and their choice arguments.
 
-- `creates`: definitions for create operations and their constructor arguments.
-- `exercises`: definitions for exercise operations, keyed by exact choice name, and their choice arguments.
-
-Each operation definition MAY specify a stable intent, an interpolatedIntent, and an ordered list of typed fields. Field formatting and path semantics are defined in the display-model chapter.
-
-A wallet MUST select definitions using the template identity and operation type, and for exercises, the exact choice name. A missing definition MUST NOT be interpreted as permission to omit the operation; the wallet must use its safe fallback.
+An operation definition MAY include a stable `intent`, an `interpolatedIntent`, and an ordered list of typed fields. Path and formatting rules are specified below. Choice definitions MAY also name the interface the choice implements; see Interface-qualified choices.
 
 #### Signature
 
-The optional `signature` field carries the information needed to verify the descriptor's integrity and authenticate its publisher. The verification and trust-model chapter specifies its exact structure, canonicalization rules, cryptographic algorithms, and trust requirements.
+The optional `signature` field carries what a wallet needs to verify integrity and authenticate the publisher. If provided, the signature MUST cover the canonical descriptor content, excluding the signature envelope, and MUST bind the schema version and template context. A change to display instructions, to metadata that affects interpretation or trust, or to a referenced definition MUST be detectable.
 
-The signature MUST cover the canonical descriptor content, excluding the signature envelope itself, and MUST bind the descriptor to its schema version and template context. Changes to display instructions, metadata that affects interpretation or trust, or referenced definitions MUST be detectable during verification.
-
-A valid signature establishes integrity and control of the signing key; it does not, by itself, establish that the publisher is trusted or that the display instructions are semantically correct.
+A valid signature establishes integrity and possession of the signing key. It does not establish that the publisher is trusted, or that the display instructions are semantically correct.
 
 ### Descriptor matching
 
-A wallet MUST match a descriptor to a transaction operation using the exact template identity:
+A wallet MUST select a descriptor by exact template identity: `packageId`, `moduleName`, and `entityName`. It MUST NOT select one by template name, package name, or a publisher-provided label.
 
-- `packageId`
-- `moduleName`
-- `entityName`
-
-All three components MUST match the template identifier in the prepared transaction. A descriptor MUST NOT be selected based only on a template name, package name, or publisher-provided label.
-
-The wallet MUST then select the operation definition:
+It MUST then select the operation definition:
 
 - **Create node:** Select the definition under `display.creates`.
 - **Exercise node:** Select the definition under `display.exercises`, keyed by the exact choice name.
 
-If no matching descriptor or operation definition is available, the wallet MUST use its safe fallback presentation. It MUST NOT apply a definition belonging to a different template or choice.
+If no descriptor or operation definition matches, the wallet MUST use its safe fallback. It MUST NOT apply a definition from another template or choice.
 
 ### Operation matching
 
-Field references are resolved against the corresponding nodeType in the prepared transaction. The descriptor defines paths and presentation rules, but MUST NOT supply replacement values for transaction fields. Displayed values MUST be derived from the prepared transaction.
+Paths are resolved against the matching node in the prepared transaction. A descriptor MUST NOT supply replacement values. Displayed values MUST come from the prepared transaction.
 
-| Node Type | Descriptor operation | Fields |
+| Node | Descriptor operation | Value |
 | --- | --- | --- |
-| `Create` | `creates` (indexed) | Contains the contract creation argument, including its constructor fields. |
-| `Exercise` | `exercises` (indexed) | The choice argument for the exercised contract and choice. |
+| Create | `creates` | Constructor arguments of the created contract. |
+| Exercise | `exercises`, keyed by choice name | Choice argument of that exercise. |
 
 ### Field references
 
-This chapter defines how wallets resolve the values referenced by their display instructions.
-
-The model follows [ERC-7730](https://eips.ethereum.org/EIPS/eip-7730) where applicable, adapted to Canton template identities, Daml-LF transaction nodes, and contract references.
+Field paths follow ERC-7730 where it applies, adapted to Daml-LF nodes and contract references.
 
 #### Field definition
 
@@ -188,27 +157,21 @@ Each field definition describes a value to be displayed.
 
 | Property | Description | Requirements |
 | --- | --- | --- |
-| `path` | Identifies a value within the relevant prepared transaction node. | REQUIRED; MUST resolve unambiguously to DAML-LF record. |
-| `label` | Human-readable field label. | OPTIONAL |
-| `format` | Formatting type used to interpret and display the value. | OPTIONAL; MUST be supported by the descriptor schema version and wallet implementation. |
-| `params` | Formatter-specific parameters. | OPTIONAL; MUST conform to the formatter's definition. |
+| `path` | Location of the value in the matched node. | REQUIRED. MUST resolve unambiguously to a Daml-LF record. |
+| `label` | Human-readable label. | OPTIONAL |
+| `format` | How the value is interpreted and displayed. | OPTIONAL. MUST be a formatter supported by this schema version and the wallet. |
 
 The `path` grammar supports named record fields, such as `amount` and `recipient`, that map to the respective Daml-LF fields in the prepared transaction.
 
-#### Path references and Interpolation
+#### Path prefixes
 
-An `interpolatedIntent` MAY reference fields using `{path}` placeholders. Following ERC-7730's interpolation model, each placeholder MUST resolve to a field with a corresponding display definition. The wallet MUST apply the same formatting rules used when displaying that field separately.
+An `interpolatedIntent` MAY embed values with `{path}` placeholders. Each placeholder MUST resolve to a field that has a display definition, and the wallet MUST format it with the same rules used when that field is shown on its own.
 
-We use the following adoption in terms of path references:
-
-| ERC-7730 | Canton adaptation |
+| ERC-7730 prefix | Canton meaning |
 | --- | --- |
-| no-prefix | Fields of a matched operation: create arguments or exercise arguments. |
-| `#` | Keys found under `display.formats` |
-| Container (`@`) | The prepared transaction. In addition, when visiting an exercise node, `@.contract` can be used to refer to the create arguments of the respective contract. |
-| Descriptor (`$`) | Canton descriptor metadata, definitions and constants |
-
-For example:
+| none | Fields of the matched operation: create arguments or exercise arguments. |
+| `@` | The prepared transaction. On an exercise node, `@.contract` refers to the create arguments of the exercised contract. |
+| `$` | Descriptor metadata, definitions, and constants. |
 
 ```json
 {
@@ -254,143 +217,27 @@ For example:
 }
 ```
 
-Interpolated values MUST be treated as untrusted data. Wallets MUST prevent field contents from altering the meaning or structure of the surrounding description. They MUST also retain access to the individual field values so users can inspect the details behind a summary.
+In this example, unprefixed paths read constructor or choice arguments. `@.contract` reads the exercised contract’s create arguments. The `contractId` path reads a map entry on the choice argument.
+
+Interpolated values MUST be treated as untrusted. A wallet MUST stop field contents from changing the meaning or structure of the surrounding text, and MUST still show the individual field values for inspection.
 
 #### Contract ID references
 
-A contract ID may appear as a value within a create or exercise argument. When the referenced contract corresponds to a node in the same prepared transaction or to a contract in the prepared transactions metadata, the wallet MAY use the contract ID as a key to locate that node.
+A contract ID in a create or exercise argument MAY be used as a lookup key when that contract is a node in the same prepared transaction, or is present in its metadata. The wallet then reads that node’s `template_id` and resolves a descriptor for that exact identity. This enriches the presentation without a separate ledger read.
 
-If a matching node is found, the wallet can obtain its template_id and use that exact template identity `(packageId, moduleName, and entityName)` to resolve a descriptor for the referenced contract. This allows the wallet to enrich the presentation with the referenced contract's declared display information without requiring a separate ledger lookup.
+1. Find a contract ID in the operation’s data.
+2. Search the prepared transaction for a create node with that contract ID.
+3. If one exists, resolve a descriptor for its template identity.
+4. Verify that descriptor’s integrity, publisher, and trust before applying its display rules.
+5. If none exists, the wallet MAY do an authorized ledger or contract-data lookup. If the contract still cannot be resolved, the reference MUST be shown as unresolved.
 
-The resolution process is:
+A contract ID alone MUST NOT be treated as evidence of the referenced contract’s template, contents, ownership, or business meaning. Trust in the referring descriptor MUST NOT extend to the referenced one, even when the path names it explicitly. Each descriptor is verified on its own.
 
-1. Identify a contract ID referenced by an operation's data.
-2. Search the prepared transaction tree for a corresponding create node, using the contract ID as the lookup key.
-3. If a matching node is found, obtain its `template_id` and resolve a descriptor for that template.
-4. Independently verify the referenced descriptor's integrity, publisher identity, and trust status before applying its display rules.
-5. If no matching node exists, the wallet MAY attempt an authorized ledger or contract-data lookup. If resolution remains unavailable, the reference MUST be displayed as unresolved.
+Resolution MUST respect Canton privacy and authorization and MUST be bounded by implementation-defined limits. Resolved data is context, not proof that the current operation is safe or authorized. The wallet MUST NOT invent missing contract contents or hide an unresolved reference. A wallet MUST still be able to present the transaction safely when resolution is unavailable.
 
-A contract ID alone MUST NOT be treated as evidence of the referenced contract's template, contents, ownership, or business meaning.
+### Interface-qualified choices
 
-Trust is evaluated independently for every descriptor:
-
-A descriptor for a referenced contract may have a different author from the descriptor for the operation currently being displayed. The wallet MUST independently verify the referenced descriptor under its trust policy. Trust in the original descriptor MUST NOT automatically extend to a referenced descriptor, even when the original descriptor explicitly refers to it.
-
-Resolution MUST respect Canton privacy and authorization constraints and MUST be bounded by implementation-defined limits. Resolved contract information is additional context, not proof that the current operation is safe or authorized. The wallet MUST NOT infer unavailable contract contents or silently omit unresolved references.
-
-Contract-reference resolution is optional in the initial version. Wallets MUST remain able to provide a safe presentation when resolution is unavailable.
-
-### Field formatting
-
-Field formatting defines how values extracted from a prepared transaction are presented to users. Descriptors declare formatting rules; wallets interpret those rules and render the resulting values using their own user interface.
-
-The model is inspired by ERC-7730, adapted to Canton and Daml-LF value types. Formatting MUST be deterministic for equivalent input values and supported descriptor definitions.
-
-#### Initial formatter set
-
-The initial version SHOULD support a small set of generic formatters:
-
-| Formatter | Purpose |
-| --- | --- |
-| `string` | Display a textual value. |
-| `number` | Display a numeric value without changing its meaning or precision. |
-| `boolean` | Display a boolean value. |
-| `party` | Display a Canton party identifier. |
-| `contractId` | Display a contract identifier, with full-value inspection when shortened. |
-| `dateTime` | Display a date or timestamp using a defined timezone and representation policy. |
-| `duration` | Display a duration using a defined unit. |
-| `enum` | Map a known value to a declared human-readable label while preserving access to the underlying value. |
-| `optional` | `($type, $value)`. Indicates an Optional value. The descriptor provides information regarding the `$type` and a `$value`. |
-| `raw` | Display a safe, generic representation of a supported value when no specialized formatter applies. |
-
-#### Handling Optionals
-
-A descriptor field is a path into the transaction, and the wallet formats whatever the path reaches. That breaks when the shape of the value varies:
-
-- An optional is `Some(x)` or `None`, and a path to a `None` has no value to format.
-- A variant carries different fields per constructor. A vesting lock has a period and an end time, and a full lock has neither.
-- An enum value is an identifier.
-
-The author otherwise has to show the raw encoding or write one fixed field list that is wrong for some shapes.
-
-#### Type safety and value preservation
-
-Formatters MUST validate input types and MUST NOT silently coerce incompatible values or lose semantically relevant information. Numeric values MUST retain their exact meaning; shortened values MUST remain inspectable in full. Party identifiers and contract IDs MUST remain distinguishable from arbitrary text, without implying unverified trust or resolution.
-
-#### Formatting parameters
-
-Formatter parameters MUST have explicit, schema-defined semantics and MUST NOT alter the underlying transaction value. Conversions, such as unit changes, MUST use explicitly defined rules and preserve access to the original value. Unsupported parameters MUST be handled according to the schema's compatibility rules, without silently changing their meaning.
-
-#### Security and presentation consistency
-
-Wallets MUST safely render transaction values as untrusted input and prevent markup injection or misleading presentation. Formatting MUST NOT hide material values or operations. Wallets SHOULD indicate when values are shortened, converted, or unresolved and provide access to the underlying values. Labels MUST NOT be treated as proof of business meaning or trust.
-
-#### Extensibility
-
-New formatters MUST define their input types, parameters, rendering semantics, and fallback behavior through versioned schema evolution. Existing formatter names MUST retain their established meaning. Unsupported formatters MUST trigger an explicit fallback rather than a guessed interpretation.
-
-### Verification and trust
-
-#### Signature model
-
-The descriptor signature protects the descriptor's integrity and can authenticate its publisher. It does not establish that the descriptor is trustworthy or semantically correct.
-
-The signature covers the canonical representation of all interpretation-relevant content, including the schema version, template context, metadata, and display definitions. The signature envelope contains the signature and the information needed to verify it, such as a public key or key reference and algorithm identifiers.
-
-The canonicalization, hashing, signature algorithms, and encoding remain to be specified.
-
-#### Trust model
-
-Signature verification and publisher trust are separate decisions:
-
-| Verification result | Publisher trust | Interpretation |
-| --- | --- | --- |
-| Invalid | Any | Descriptor integrity cannot be established |
-| Valid | Untrusted | Content is intact, but its publisher is not trusted |
-| Valid | Trusted | Content is intact and its publisher meets the wallet's trust policy |
-| Unavailable | Unknown | Integrity or publisher cannot be verified |
-
-Trust may be established through a curated registry, trusted publisher keys, or user-managed decisions. Referenced descriptors are separate trust objects: trust in one descriptor does not extend to another.
-
-Key rotation, revocation, and compromise handling are part of the trust model and require defined policies.
-
-#### Discovery and distribution
-
-Descriptor discovery is independent of the descriptor format and wallet implementation. Possible distribution mechanisms include:
-
-| Mechanism | Purpose |
-| --- | --- |
-| Registry | Index and discover descriptors |
-| Publisher endpoint | Retrieve descriptors directly from their publishers |
-| Application bundle | Distribute descriptors alongside Daml packages or applications |
-| Wallet store | Cache or manage descriptors locally |
-
-No single distribution mechanism is required. Discovery identifies candidate descriptors; verification and trust evaluation determine whether they can be relied upon.
-
-### Compatibility
-
-#### Multi-synchronizer support
-
-The descriptor format is synchronizer-agnostic and supports multi-synchronizer environments. The synchronizer context is obtained from the prepared transaction metadata (synchronizerId), rather than being encoded in the descriptor. This allows the same descriptor to be reused across synchronizers without requiring synchronizer-specific variants.
-
-### Integration
-
-#### Resolution flow
-
-A wallet resolves a descriptor using the exact template identity: packageId, moduleName, and entityName. Exercise operations additionally require a matching choice name.
-
-For contract ID references, resolution may follow this flow:
-
-1. Locate the referenced contract ID in the prepared transaction's create nodes.
-2. Read the matching node's template identity.
-3. Resolve a descriptor for that template.
-4. Verify and evaluate trust in the resolved descriptor independently.
-
-If no corresponding node exists in the prepared transaction, a wallet may perform an external lookup where permitted. A contract ID alone does not establish the template identity or contract contents.
-
-#### Interfaces
-
-I propose not just picking a choice by an exact match against the name, but additionally allow a choice to provide information on which interface it is an implementation of. The reasoning behind this is not only for explanatory purposes in the clear signing view, but also to handle cases where a single choice matches multiple interfaces (within the token standards, transfers and allocation match this). This would look something like this:
+An exercise definition MAY identify the interface a choice implements, in addition to the choice name. One choice name can implement more than one interface. In the token standards, transfer and allocation are cases of this. The interface entry also tells the wallet which interface to explain.
 
 ```json
 "exercises": [
@@ -409,129 +256,188 @@ I propose not just picking a choice by an exact match against the name, but addi
 ]
 ```
 
-We do not have to provide package IDs of the interfaces, as this is implicit by the package ID of the template. Additionally, we shouldn’t allow a fallback here, so if your choice implements an interface, this should be apparent by the descriptor and it should be checked by the parsing.
+The interface is identified by `moduleName` and `entityName` only. Its package ID is implied by the template’s package ID and MUST NOT be given separately. When a choice declares an interface, the wallet MUST check that declaration and MUST NOT fall back to a match on choice name alone.
 
-#### Resolution failures and fallback behavior
+### Field formatting
 
-A wallet MUST handle matching and field-resolution failures explicitly. Examples include:
+Field formatting defines how values extracted from a prepared transaction are presented to users. Descriptors declare formatting rules; wallets interpret those rules and render the resulting values using their own user interface.
 
-- No descriptor matches the template.
-- No operation definition matches the create or choice.
-- A field path does not exist in the operation data.
-- A field value has an unexpected type.
-- An interpolation references an undefined or unformattable field.
-- A referenced contract or its descriptor cannot be resolved or trusted.
+The initial version SHOULD support these formatters:
 
-If interpolation fails, the wallet MUST fall back to the stable intent and display applicable fields separately where possible. If a field or reference cannot be interpreted safely, the wallet MUST indicate that limitation rather than present an invented or misleading value.
+| Formatter | Purpose |
+| --- | --- |
+| `string` | Display a textual value. |
+| `number` | Display a numeric value without changing its meaning or precision. |
+| `boolean` | Display a boolean value. |
+| `party` | Display a Canton party identifier. |
+| `contractId` | Display a contract identifier, with full-value inspection when shortened. |
+| `dateTime` | Display a date or timestamp with a defined timezone and representation. |
+| `duration` | Display a duration in a defined unit. |
+| `enum` | Map a known value to a label, while keeping the underlying value available. |
+| `optional` | Display an optional as `$type` and `$value`. |
+| `raw` | Display a safe generic form when no specialized formatter applies. |
 
-Failure to interpret one operation MUST NOT cause the wallet to omit that operation or any other operation in the prepared transaction. Unknown or unsupported operations MUST remain visible through a generic fallback.
+Formatting MUST be deterministic for equivalent input values and supported descriptor definitions.
 
-#### Wallet integration
+#### Handling Optionals
 
-The wallet combines three inputs to produce the signing view:
+A descriptor field is a path into the transaction, and the wallet formats whatever the path reaches. That breaks when the shape of the value varies:
+
+- An optional is `Some(x)` or `None`, and a path to a `None` has no value to format.
+- An enum value is an identifier.
+
+The author otherwise has to show the raw encoding or write one fixed field list that is wrong for some shapes.
+
+#### Type safety and value preservation
+
+Formatters MUST validate input types and MUST NOT silently coerce incompatible values or lose semantically relevant information. Numeric values MUST retain their exact meaning; shortened values MUST remain inspectable in full. Party identifiers and contract IDs MUST remain distinguishable from arbitrary text, without implying unverified trust or resolution.
+
+#### Security and presentation consistency
+
+Wallets MUST safely render transaction values as untrusted input and prevent markup injection or misleading presentation. Formatting MUST NOT hide material values or operations. Wallets SHOULD indicate when values are shortened, converted, or unresolved and provide access to the underlying values. Labels MUST NOT be treated as proof of business meaning or trust.
+
+#### Extensibility
+
+New formatters MUST define their input types, parameters, rendering semantics, and fallback behavior through versioned schema evolution. Existing formatter names MUST retain their established meaning. Unsupported formatters MUST trigger an explicit fallback rather than a guessed interpretation.
+
+### Verification and trust
+
+#### Signature model
+
+The signature protects integrity and can authenticate the publisher. It does not make the descriptor trustworthy or semantically correct.
+
+It covers the canonical form of everything that affects interpretation: schema version, template context, metadata, and display definitions. The envelope carries the signature plus the key material and algorithm identifiers needed to verify it.
+
+#### Trust model
+
+Verification and publisher trust are separate decisions:
+
+| Verification | Publisher | Meaning |
+| --- | --- | --- |
+| Invalid | Any | Integrity cannot be established. |
+| Valid | Untrusted | Content is intact. The publisher is not trusted. |
+| Valid | Trusted | Content is intact, and the publisher meets the wallet’s trust policy. |
+| Unavailable | Unknown | Integrity or publisher cannot be verified. |
+
+Trust MAY come from a curated registry, trusted publisher keys, or a user decision. A referenced descriptor is a separate trust decision. Key rotation, revocation, and compromise handling require an explicit policy.
+
+#### Discovery and distribution
+
+Discovery is independent of the descriptor format. No single channel is required. Finding a descriptor does not make it trusted. Verification does.
+
+| Mechanism | Purpose |
+| --- | --- |
+| Registry | Index and discover descriptors. |
+| Publisher endpoint | Retrieve descriptors from their publishers. |
+| Application bundle | Ship descriptors with Daml packages or applications. |
+| Wallet store | Cache or manage descriptors locally. |
+
+### Compatibility
+
+The format does not name a synchronizer. The synchronizer comes from prepared-transaction metadata (`synchronizerId`), so one descriptor can be reused across synchronizers.
+
+### Wallet integration
+
+Three inputs produce the signing view:
 
 | Input | Role |
 | --- | --- |
-| Prepared transaction | Authoritative source of operation structure and values |
-| Descriptor | Defines how supported operations and fields are presented |
-| Trust policy | Determines whether the descriptor can be relied upon |
+| Prepared transaction | Authoritative operation structure and values. |
+| Descriptor | How supported operations and fields are presented. |
+| Trust policy | Whether that descriptor may be relied on. |
 
-A wallet interprets a prepared transaction by combining its transaction tree with descriptors that define how supported operations and fields should be displayed. The descriptor does not decode or replace the transaction; it provides the mapping from known transaction structures to human-readable representations.
+The wallet walks the tree, resolves a descriptor per create or exercise, validates it, binds field paths, formats values, and renders intent and fields while keeping the underlying data available. These are responsibilities, not required components. An implementation MAY combine them.
 
-The parsing process consists of the following steps:
-
-1. Parse the prepared transaction: Read the transaction tree and identify root nodes, nested operations, template identities, choices with their arguments, and metadata.
-2. Resolve descriptors: Match each supported create or exercise operation to a descriptor using its exact template identity and, for exercises, the choice name.
-3. Validate and bind fields: Validate the descriptor against its schema and bind declared field paths to values in the prepared transaction.
-4. Format values: Apply the descriptor's field definitions and supported formatters without changing the underlying semantic values.
-5. Render the result: Produce human-readable intent and field representations, while retaining access to the underlying transaction data for review and verification.
-
-| Component | Responsibility |
+| Responsibility | Does |
 | --- | --- |
-| Transaction parser | Traverses the prepared transaction and exposes operation data |
-| Descriptor resolver | Finds applicable descriptors for template identities and operations |
-| Schema validator | Checks descriptor structure and supported features |
-| Field interpreter | Resolves field paths and applies formatting and interpolation |
-| Trust verifier | Verifies descriptor integrity and applies publisher trust policy |
-| Presentation layer | Renders interpreted operations and handles unsupported cases |
+| Transaction parser | Walks the prepared transaction and exposes operation data. |
+| Descriptor resolver | Finds a descriptor for a template identity and operation. |
+| Schema validator | Checks structure and supported features. |
+| Field interpreter | Resolves paths, formatting, and interpolation. |
+| Trust verifier | Checks integrity and applies publisher trust. |
+| Presentation layer | Renders interpreted operations and unsupported cases. |
 
-These components describe logical responsibilities, not mandatory separate packages or services. Implementations MAY combine them in a single library.
+When interpretation is incomplete, the fallback makes that visible. Descriptor metadata does not replace validation, authorization, or signing. The wallet remains responsible for signing the transaction that was presented.
 
-When interpretation is incomplete, the wallet falls back to a representation that makes the limitation visible. Descriptor metadata does not replace transaction validation, authorization, or signing. The wallet remains responsible for ensuring that the transaction signed and executed is the one presented for review.
+### Resolution failures
+
+A wallet MUST handle match and field-resolution failures explicitly, including:
+
+- No descriptor matches the template.
+- No definition matches the create or choice.
+- A path is missing from the operation data.
+- A value has an unexpected type.
+- An interpolation refers to an undefined or unformattable field.
+- A referenced contract or its descriptor cannot be resolved or trusted.
+
+If interpolation fails, the wallet MUST show the stable intent and MUST show the fields it can still display. It MUST NOT invent a value. Failure on one operation MUST NOT hide that operation or any other. Unknown or unsupported operations MUST remain visible through the safe fallback.
+
+### Limitations
+
+The descriptor improves readability. It does not establish that a transaction is safe or correct.
+
+| Limitation | What remains true |
+| --- | --- |
+| Descriptor availability | Interpretation depends on a matching descriptor. |
+| Publisher trust | A valid signature does not mean the intent is accurate. |
+| Semantic correctness | Display rules do not check Daml behavior. |
+| Transaction context | One operation may not show the full effect across contracts. |
+| Unsupported operations | Unsupported nodes or features cannot be fully interpreted. |
+| External references | Resolving another contract can require more access, raise privacy questions, or be impossible. |
+| Wallet compatibility | Wallets may interpret and present to different depths. |
+
+Wallets still validate and authorize on their own, and they show the limit of the interpretation.
 
 ## API Evolution
 
-This section defines how the dApp API and its associated artifacts are expected to evolve following the acceptance of this CIP.
+This section defines how the Clear Signing Descriptor Schema evolves after this CIP is accepted.
 
 ### Versioning
 
-The Descriptor Schema artifact defined by this CIP **MUST** be versioned. The authors of this CIP will publish the first stable version 1.0.0 of the API upon acceptance of the CIP. Published artifacts will be maintained in the `/api-specs/` directory in the [splice-wallet-kernel](https://github.com/canton-network/wallet/tree/main/api-specs) repository.
+The schema artifact defined by this CIP **MUST** be versioned. The authors will publish schema 1.0.0 on acceptance. Published artifacts will be maintained in the `/api-specs/` directory in the [splice-wallet-kernel](https://github.com/canton-network/wallet/tree/main/api-specs) repository.
 
-Descriptor authors **SHOULD** check upon writing whether the version is recent enough to support their use of the schema.
+Descriptor authors **SHOULD** check that the schema version supports the features they use.
 
 ### Categories of Changes
 
-API changes fall into three categories:
+Schema changes fall into three categories:
 
 #### Editorial Changes
 
-Clarifications, wording updates, and other non-semantic improvements **MAY** be made at any time.
-These changes neither require a new Schema version nor a CIP amendment.
+Clarifications, wording updates, and other non-semantic improvements **MAY** be made at any time. These changes neither require a new schema version nor a CIP amendment.
 
 #### Non-Breaking Changes
 
-Backward-compatible modifications – such as adding optional fields that do not affect existing behavior – **MAY** be introduced in coordination with other wallet providers and descriptor authors.
-Such changes **SHOULD** result in a new minor version of the Schema artifact, but do not require an amendment to this CIP.
+Backward-compatible modifications, such as optional fields that do not affect existing behavior, **MAY** be introduced in coordination with other wallet providers and descriptor authors. Such changes **SHOULD** result in a new minor version of the schema artifact, but do not require an amendment to this CIP.
 
 #### Breaking Changes
 
-Modifications that alter existing semantics, remove functionality, or introduce new mandatory behavior **MUST** be treated as breaking. Breaking changes **REQUIRE** an amendment to this CIP and the publication of a new minor version of the API artifacts.
+Modifications that alter existing semantics, remove functionality, or introduce new mandatory behavior **MUST** be treated as breaking. Breaking changes **REQUIRE** an amendment to this CIP and publication of a new minor version of the schema artifact.
 
 ### Guiding Principles
 
-The evolution of the Schema **SHOULD** prioritize:
-- Long-term interoperability across independently developed descriptors and their integrators
+Evolution of the schema **SHOULD** prioritize:
+
+- Long-term interoperability across independently written descriptors and the wallets that apply them
 - Stability of published versions
 - Minimization of breaking changes
 - Predictable upgrade paths for implementers
 
-This CIP governs the lifecycle of the Clear Signing Descriptor Schema; any change that alters normative behavior falls under the processes defined above.
+This CIP governs the Clear Signing Descriptor Schema. Any change that alters normative behavior follows the process above.
 
 ## Rationale
 
+Prepared transactions already expose creates, exercises, template identities, and arguments. They do not describe business intent. A portable descriptor lets a publisher describe a template once, and lets any wallet present that template the same way.
+
 ### Alignment with existing ecosystem standards
 
-Blockchain ecosystems expose transaction data through different models, from structured messages and instructions to encoded contract calls. Wallets interpret this data using chain-specific schemas, decoders, and application logic.
+[ERC-7730](https://eips.ethereum.org/EIPS/eip-7730) is the reference: a descriptor separate from the transaction, with human-readable intent, field formatting, interpolated summaries, and a registry for reuse. [EIP-712](https://eips.ethereum.org/EIPS/eip-712) is the complementary foundation for typed structured data. Other ecosystems, including Solana instructions and Cosmos SDK messages, use different transaction shapes and do not define this kind of descriptor.
 
-Ethereum's ERC-7730 defines a portable descriptor format for clear signing, separating transaction data from metadata describing how it should be presented. It supports human-readable intent, field formatting, and interpolated summaries. The ERC-7730 descriptor registry provides a mechanism for publishing and reusing descriptors. EIP-712 provides complementary foundations for typed structured data signing.
-
-Other ecosystems use different approaches. Solana transactions organize operations as program instructions, while the Cosmos SDK uses structured messages and transaction encoding. These models provide useful context, although they do not define the same descriptor-based approach as ERC-7730.
-
-ERC-7730 provides the primary architectural reference for a Canton-native descriptor, while other ecosystems illustrate different transaction representations and interpretation approaches.
-
-The proposed standard adapts the descriptor concept to Canton’s transaction model, defining interoperable display semantics, descriptor verification, and trust handling without coupling the format to a particular wallet or distribution mechanism.
+This CIP keeps the ERC-7730 split and adds what Daml-LF prepared transactions require: exact template identity, create and exercise matching, nested traversal, contract references, and a trust check that is not tied to one wallet or one distribution channel.
 
 ### Minimal but sufficient scope
 
-Canton's Ledger API already exposes prepared transactions as create and exercise nodes with template identities and arguments, but not a portable description of business intent. The descriptor binds display definitions to exact template identities and to those operations.
-
-Extensions such as annotations integrated in the Daml language would exceed this scope. Embedding display metadata in Daml itself remains conceptually possible as a future extension.
-
-### Limitations
-
-The Canton Clear Signing Descriptor improves transaction readability but does not independently establish transaction safety or correctness.
-
-| Limitation | Description |
-| --- | --- |
-| Descriptor availability | Human-readable interpretation depends on a matching descriptor being available. |
-| Publisher trust | A valid signature does not guarantee that a descriptor accurately represents the operation's intent. |
-| Semantic correctness | Descriptors describe how data is presented; they do not verify Daml business logic or contract behavior. |
-| Transaction context | Individual operations may not convey the full business meaning of a transaction or its effects across contracts. |
-| Unsupported operations | Wallets may be unable to provide a complete interpretation when operations or descriptor features are unsupported. |
-| External references | Resolving referenced contracts may require additional access, introduce privacy concerns, or be impossible. |
-| Wallet compatibility | Different wallet capabilities may lead to different levels of interpretation and presentation. |
-
-The descriptor is therefore one component of a broader signing security model. Wallets must continue to validate and authorize transactions independently and clearly communicate the limits of their interpretation.
+The descriptor only binds display definitions to exact template identities and to create and exercise operations. Annotations integrated into the Daml language would go beyond that. Embedding display metadata in Daml remains possible later.
 
 ## Alternatives Considered
 
@@ -550,7 +456,7 @@ Each wallet could implement its own mappings from Canton templates and choices t
 - Tight coupling between wallet releases and application changes
 - Limited portability and reuse
 
-A portable descriptor format allows applications and publishers to provide reusable presentation metadata without requiring wallet-specific integrations.
+A portable descriptor lets applications and publishers supply presentation metadata once, without a wallet-specific integration.
 
 ### Raw prepared transaction display
 
@@ -567,11 +473,11 @@ Wallets could display the prepared transaction as structured JSON or another low
 - Exposes implementation details rather than business intent
 - Makes security-relevant values harder to identify and review
 
-Raw transaction data remains useful as a fallback or detailed inspection view, but is insufficient as the primary clear-signing experience.
+Raw transaction data remains appropriate as a fallback or inspection view. It is not a sufficient primary clear-signing experience.
 
 ### Application-provided display strings
 
-Applications could provide human-readable descriptions alongside transaction requests.
+Applications could send human-readable descriptions alongside transaction requests.
 
 **Advantages**
 
@@ -580,57 +486,40 @@ Applications could provide human-readable descriptions alongside transaction req
 
 **Disadvantages**
 
-- Display text may be disconnected from the actual prepared transaction
+- Display text may be disconnected from the prepared transaction
 - No standard mapping between descriptions and transaction fields
-- Requires additional mechanisms to verify integrity and establish trust
+- Requires a separate mechanism to verify integrity and establish trust
 
-The proposed descriptor binds display definitions to exact template identities and derives displayed values from the prepared transaction, reducing the risk of misleading descriptions.
+The descriptor binds display definitions to an exact template identity and takes displayed values from the prepared transaction.
 
 ### Adopting ERC-7730 without Canton-specific adaptation
 
-Ethereum's ERC-7730 provides a useful reference for portable clear-signing descriptors.
+ERC-7730 is the right reference for a portable clear-signing descriptor. Canton transactions are prepared trees of creates and exercises, identified by template and choice, and they refer to other contracts. Adopting the Ethereum descriptor unchanged would not match those nodes or resolve those references.
 
-However, Canton transactions use structured prepared transaction trees with create and exercise nodes, template identities, and choice arguments. A direct adoption would not fully address these semantics or the resolution of referenced contracts.
-
-The proposed approach reuses the descriptor-based architecture while defining Canton-specific operation matching, transaction traversal, and reference resolution.
+This CIP reuses the descriptor architecture and defines Canton operation matching, tree traversal, and reference resolution.
 
 ## Future Work
 
-This section describes the work items discovered during the process of designing and building the POC, but are out of scope for this design and thus not part of the initial MVP.
+The following items came out of the proof of concept. They are outside the initial version.
 
-### Parameterized Formatters
-
-A future possibility is to introduce parameters to a format, which, as per ERC-7730 is defined under fields[n].params.
-
-### Variant Formatter
-
-Rather than tackle all of these at ones, we’ll handle optionals initially and tackle variants later. I propose an initial solution where the descriptor author can set a flag Optional:true for a field, which will write None if a specific field isn’t present and otherwise the formatting provided to the field will be used.
-
-### Parsed representation of the interpolated intent
-
-A wallet should be able to highlight the substituted values (variables) of the interpolated intent. Thus, enabling to visually differentiate substituted value from other text.
-
-### Contract reference resolution
-
-See Requirement F4.
-
-### Display format references
-
-A separate section display.format that holds references other display sections can refer to.
-
-### Verifiable provenance
-
-Signatures.
+| Item | Deferred work |
+| --- | --- |
+| Parameterized formatters | Formatter parameters, following ERC-7730 `fields[n].params`. |
+| Variant formatter | Optionals are in the initial version. Variants are not. A later descriptor may mark a field so that a missing value is shown as `None` and a present value uses that field’s formatter. |
+| Parsed interpolated intent | A wallet should be able to highlight substituted values separately from the surrounding text. |
+| Contract reference resolution | Optional in the initial version. See Contract ID references. |
+| Display format references | A `display.format` section that other display definitions can reference. |
+| Verifiable provenance | Signature canonicalization, hashing, algorithms, and encoding. See Signature model. |
 
 ## References
 
-The following resources provide normative specifications and reference implementations compatible with the Canton Descriptor Schema. The specifications listed below will become **normative with the v1.0.0 release**, while the core-packages serve as **reference implementations** to illustrate correct usage.
+The following resources provide normative specifications and reference implementations compatible with the Canton Descriptor Schema. The specifications listed below will become **normative with the v1.0.0 release**, while the core packages serve as **reference implementations**.
 
 ### Specifications
 
 
 ### Reference Implementations
 
-## Change log 
+## Change log
 
 * **2026-11-23**: Initial draft of the proposal.
