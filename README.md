@@ -124,6 +124,6 @@ Global Synchronizer CIPs
 | [cip-0129](/cip-0129/cip-0129.md) |  | Universal Burn and Synchronizer Pricing | Yiannis Varelas, Shaul Kfir | Tokenomics | Approved |
 | [cip-0130](/cip-0130/cip-0130.md) |  | Nomura Super Validator Weight 10 | Eric Saraniecki | Governance | Approved |
 | [cip-0131](/cip-0131/cip-0131.md) |  | Add CapConnect+ (CC+) as a Super Validator (Max Weight 5) | CapConnect+, Inc. | Governance | Approved |
-| [cip-0132](/cip-0132/cip-0132.md) |  | Dedicated Synchronizer Paymaster Model | Moritz Kiefer  | Tokenomics | Proposed |
+| [cip-0132](/cip-0132/cip-0132.md) |  | Dedicated Synchronizer Paymaster Model | Moritz Kiefer  | Tokenomics | Approved |
 
 
