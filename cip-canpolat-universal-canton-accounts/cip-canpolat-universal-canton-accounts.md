@@ -3,7 +3,7 @@
   Layer: Wallet, Validator, Scan
   Title: Universal Canton Accounts: one key, every wallet
   Author:
-    Yunus Emre Canpolat
+    Abdulkadir Canpolat
   Status: Draft
   Type: Standards Track
   Created: 2026-11-21
