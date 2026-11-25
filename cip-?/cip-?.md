@@ -75,8 +75,8 @@ SV Right Owners can change their beneficiary configuration at will.
 
 This completely replaces the `approved-sv-id-values.yaml` off-ledger configuration.
 
-If a node operator is itself an SV Right Owner, it will also be represented as an SV Right Owner on its own node,
-with its weight managed in the exact same way as all other SV Right Owners.
+If a node operator is itself an SV Right Owner, it will also be represented as an SV Right Owner with its own nodes assigned. 
+Its weight will be managed in the exact same way as all other SV Right Owners.
 
 After the migration to the new model, SV Nodes no longer have any weight associated with them directly.
 The `SvInfo.svRewardWeight` field is deprecated. See the Backwards Compatibility section for more information.
