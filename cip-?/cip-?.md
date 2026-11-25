@@ -48,23 +48,23 @@ Super Validator weights are currently managed as follows:
   followed by the SV Node Operator updating the node's off-ledger beneficiary configuration.
 - All other SVs need to configure the node's total weight off-ledger, so that the off-ledger configuration can be used for re-onboarding,
   in a case when offboarding is required for any reason.
-- Escrowed rewards are implemented using ghost-parties.
+- Escrowed rewards are implemented using ghost-parties in the off-ledger configuration.
 
-Crucially, SV Right Owners and beneficiaries are not represented on the ledger.
+Crucially, SV Right Owners, escrowed weights and beneficiaries are not represented on the ledger.
 
 This CIP introduces the following changes:
 
 - A Daml ledger data model including `SvRightOwner` and `SvRightOwnerInfo`, which store Right Owner's reward weights.
-- Elimination of the off-ledger weight configuration.
+- Elimination of the off-ledger weight configuration for the purpose of SV rewards.
 - SV Right Owner onboarding, offboarding, and weight updates via on-ledger governance votes.
 - The weights of any SV Right Owners can be updated independently and in parallel.
-- SV Right Owner can be associated with several SV Right Node Operators and an SV Right Owner’s reward coupons for a round can be issued only by its configured SV Node Operators.
-- SV Right Owner is managed by a single Party. Each assignment and its beneficiaries can have different Parties provided for their rewards.
+- SV Right Owner can be assigned to several SV Right Node Operators and an SV Right Owner’s reward coupons for a round can be issued only by its configured SV Node Operators.
+- SV Right Owner is managed by a single Party. Each of its Node assignments and beneficiaries can have different Parties provided for their rewards.
 - The SV Node Operator now will issue coupons to all recipients according to the on-ledger beneficiary configuration.
 - SV Right Owners will be able to manage their own beneficiaries without requiring approvals, actions by SV node operators, or votes from other SVs.
-- Migration from the existing to the new model will invalidate the legacy SV coupon creation flow.
-- Migration does not duplicate rewards. SV Node Operators that continue under the same name keep their rewards. Other SV Right Owners, including those added later, start receiving rewards from the next round.
-- Escrowed weights are tracked explicitly under corresponding SV Right Owner. Ghost-parties are removed.
+- Migration from the existing to the new model will replace the legacy SV coupon creation flow.
+- Despite that, migration preserves continuity of SV rewards.
+- Escrowed weights are tracked on-ledger, explicitly under corresponding SV Right Owner.
 
 ### 2. Implementation Mechanics
 #### Introduction
@@ -108,7 +108,7 @@ The following actions that require a vote are added to the Daml model and the SV
 #### Coupon Creation
 SV Reward Coupons continue to be created by each SV Node on behalf of SV Right Owners hosted on that node for reward minting.
 One `SvRewardCoupon` per round will be created for each beneficiary of each SV Right Owner.
-If there is leftover weight, one is created for SV Right Owner.
+If there is leftover weight, one is created for SV Right Owner's specified default beneficiary.
 Additional unclaimed rewards are created using Escrowed Weights.
 
 `DsoRules` is extended with a choice, `DsoRules_ReceiveSvRewardCouponV2`, to create these coupons.
@@ -137,6 +137,7 @@ A proposed mapping based on the `approved-sv-id-values.yaml` to SV Right Owner m
 As of this CIP this Party will be only responsible for beneficiary management.
 
 Other than software update, the migration does not require action to preserve existing reward-minting operations.
+Migration preserves continuity of SV rewards.
 
 #### Changes to SV Node Onboarding Flow
 As SV Nodes no longer have any weight associated with them, the SV Node onboarding flow will be changed to reflect this.
@@ -155,6 +156,86 @@ Escrowed weights will be used to create unclaimed rewards in a manner that align
 
 All changes to escrowed weights, including milestones, fulfillment, etc., will require a voted change to SV Right Owner structure.
 
+#### Data Model
+
+This graph presents the solution's Daml model, which contains relations between important entities:
+
+```mermaid
+classDiagram
+    direction TB
+    class DsoRules {
+        <<template>>
+        svs : Map Party SvInfo
+        svRightOwners : Optional #40;Set Text#41;
+        DsoRules_UpdateSvRightOwnerBeneficiaries(name, baseInfo, newInfo, rightOwner)
+    }
+    class SvRightOwner {
+        <<template>>
+        dso : Party
+        name : Text
+        info : SvRightOwnerInfo
+    }
+    class SvRightsOwnerKey {
+        dso : Party
+        name : Text
+    }
+    class SvRightOwnerInfo {
+        rightOwnerParty : Party
+        description : Text
+        svNodeAssignments : TextMap SvNodeAssignment
+    }
+    class SvNodeAssignment {
+        svNodeName : Text
+        rewardWeight : Int
+        escrowBeneficiaries : [EscrowBeneficiary]
+        beneficiaries : Map Party BeneficiaryInfo
+        defaultBeneficiary : Party
+    }
+    class EscrowBeneficiary {
+        beneficiary : Party
+        rewardWeight : Int
+    }
+    class BeneficiaryInfo {
+        rewardRatio : Decimal
+    }
+    class SvRewardCoupon {
+        <<template>>
+        dso : Party
+        sv : Party
+        beneficiary : Party
+        round : Round
+        weight : Int
+    }
+    class UnclaimedReward {
+        <<template>>
+        dso : Party
+        amount : Decimal
+    }
+    class SvRightsOwnerRewardState {
+        <<template>>
+        dso : Party
+        svRightsOwnerName : Text
+        svNodeAssignmentId : Text
+        state : RewardState
+    }
+    class SvRightsOwnerRewardStateKey {
+        dso : Party
+        svRightsOwnerName : Text
+        svNodeAssignmentId : Text
+    }
+    DsoRules ..> SvRightOwner : owner names
+    SvRightOwner -- SvRightsOwnerKey : key
+    SvRightOwner *-- SvRightOwnerInfo
+    SvRightOwnerInfo *-- "1..n" SvNodeAssignment : keyed by a stable id, at most one per SV node
+    SvNodeAssignment *-- "0..20" EscrowBeneficiary : part of rewardWeight, set by vote
+    SvNodeAssignment *-- "0..20" BeneficiaryInfo : share of rewardWeight minus escrow
+    SvNodeAssignment ..> DsoRules : svNodeName is an SV in svs
+    SvNodeAssignment ..> SvRightsOwnerRewardState : one per assignment, kept when it moves
+    SvRightsOwnerRewardState -- SvRightsOwnerRewardStateKey : key
+    SvNodeAssignment ..> SvRewardCoupon : each round, one per beneficiary and escrow beneficiary
+    SvRewardCoupon ..> UnclaimedReward : escrow coupons expected to expire unclaimed
+```
+
 ## Motivation
 
 Keeping SV Right Owner weights completely off-ledger has several problems:
@@ -166,7 +247,7 @@ Keeping SV Right Owner weights completely off-ledger has several problems:
 - SV Right Owners have to depend on their SV Node to change its off-ledger configuration when managing beneficiaries.
 - Further developments that rely on SV Right Owner weight are currently hard to implement (e.g., weighted voting or [automatic SV underlock enforcement](https://github.com/canton-foundation/cips/blob/main/cip-0127/cip-0127.md#automatic-enforcement-of-sv-underlocking)).
 - SV Right Owners and their weights are not visible publicly in block explorers and in Scan APIs.
-- Realizing escrowed rewards requires artificial ghost-parties configuration.
+- Realizing escrowed rewards also requires off-ledger configuration.
 
 This proposal solves all of these issues and provides a strong base for further developments involving SV weight and rewards.
 
@@ -209,16 +290,15 @@ Moreover, the existing SV onboarding flow will be affected by migration. Any onb
 
 ### Rewards
 The introduction of `SvRightOwner` preserves the existing reward system. However, the Daml reward-creation choice is changing:
-`DsoRules_ReceiveSvRewardCoupon` is replaced by `DsoRules_ReceiveSvRewardCouponV2`. For SV Node Operators, up-to-date software will be required after migration to continue minting coupons.
+`DsoRules_ReceiveSvRewardCoupon` is replaced by `DsoRules_ReceiveSvRewardCouponV2`.
+For SV Node Operators, up-to-date software will be required after migration to continue minting coupons.
 
 #### SV Reward State
 
 `SvRewardSate` will be replaced by a new state tracking contract `SvRightsOwnerRewardState`.
-This reflects the fact that rewards are now tied to SV Right Owners instead of SV Nodes.
 SV Right Owner will have one State for each of its SV Node assignment.
 Their use in reward process remains otherwise unchanged.
-Existing reward states will be migrated during migration.
-This is done to preserve continuity of rewards.
+Existing reward states will be replaced during migration.
 
 ## Reference implementation
 
@@ -235,3 +315,4 @@ The implementation can be tracked in the Splice feature fork: https://github.com
 * 2026-10-26: Mentioned dApp as a chosen way to deliver beneficiaries management.
 * 2026-10-29: Additional external links. Backwards compatibility section is now more precise about obsoleting `SvInfo.svRewardWeight`.
 * 2026-11-20: Added new design for escrowed rewards.
+* 2026-11-25: No more reward loss possible. Entity graph.
