@@ -75,7 +75,7 @@ SV Right Owners can change their beneficiary configuration at will.
 
 This completely replaces the `approved-sv-id-values.yaml` off-ledger configuration.
 
-If a node operator is itself an SV Right Owner, it will also be represented as an SV Right Owner with its own nodes assigned. 
+If a node operator is itself an SV Right Owner, it will also be represented as an SV Right Owner with its own nodes assigned.
 Its weight will be managed in the exact same way as all other SV Right Owners.
 
 After the migration to the new model, SV Nodes no longer have any weight associated with them directly.
@@ -167,7 +167,7 @@ classDiagram
         <<template>>
         svs : Map Party SvInfo
         svRightOwners : Optional #40;Set Text#41;
-        DsoRules_UpdateSvRightOwnerBeneficiaries(name, baseInfo, newInfo, rightOwner)
+        DsoRules_UpdateSvRightOwnerBeneficiaries(name, baseInfo, newInfo, rightOwnerParty)
     }
     class SvRightOwner {
         <<template>>
@@ -181,14 +181,13 @@ classDiagram
     }
     class SvRightOwnerInfo {
         rightOwnerParty : Party
-        description : Text
         svNodeAssignments : TextMap SvNodeAssignment
     }
     class SvNodeAssignment {
         svNodeName : Text
         rewardWeight : Int
         escrowBeneficiaries : [EscrowBeneficiary]
-        beneficiaries : Map Party BeneficiaryInfo
+        beneficiaries : [BeneficiaryInfo]
         defaultBeneficiary : Party
     }
     class EscrowBeneficiary {
@@ -196,6 +195,7 @@ classDiagram
         rewardWeight : Int
     }
     class BeneficiaryInfo {
+        beneficiary : Party
         rewardRatio : Decimal
     }
     class SvRewardCoupon {
@@ -205,6 +205,7 @@ classDiagram
         beneficiary : Party
         round : Round
         weight : Int
+        svRightsOwnerName : Optional Text
     }
     class UnclaimedReward {
         <<template>>
