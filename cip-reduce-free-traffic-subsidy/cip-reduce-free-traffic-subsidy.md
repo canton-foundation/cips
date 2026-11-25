@@ -15,7 +15,8 @@
 
 At the time of writing, every validator receives free base-rate traffic:
 a 200 KB burst that refills every 20 minutes.
-Across about 800 active validators, this is a subsidy of up to $0.7M per day at a traffic price of 60 $/MB.
+At a traffic price of 60 $/MB, this is a subsidy of up to 14.4 MB, or $864, per day per validator;
+i.e., up to $0.7M per day across a network of 800 active validators.
 This subsidy is a problem because it represents lost burn for the network and
 allows earning app rewards without incurring any traffic costs.
 
