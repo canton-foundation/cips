@@ -291,11 +291,11 @@ They ingest credentials through the [Bulk Credential Retrieval API](#bulk-creden
 
 #### Credential Registry Publication API
 
-The purpose of the Credential Registry Publication API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
+The purpose of the Credential Registry Publication API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both, and also the paying party when it charges a fee. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
 
 Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
-This API uses the factory pattern pioneered in [CIP-0056](../cip-0056/cip-0056.md): the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder. Each element of its `newCredentials` argument becomes one credential record with its claims and validity period. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
+This API uses the factory pattern pioneered in [CIP-0056](../cip-0056/cip-0056.md): the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder, executed by the parties in its `actors` argument. Each element of its `newCredentials` argument becomes one credential record with its claims, its validity period and, optionally, a requested `expiresAt`. Registries MAY charge a fee for an `expiresAt` beyond their default, and take the payment through registry-specific entries in the choice's `extraArgs`; see [Extended Expiration Durations](#extended-expiration-durations) for the Canton Credential Registry. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
 
 The `CredentialFactory` Daml interface and the HTTP API endpoint are specified in:
 
@@ -312,44 +312,34 @@ It uses a retention window of 7 days for the events served by the [Bulk Credenti
 By default, there is no Canton Coin (CC) payment required for creating credential records in the registry.
 Instead, the registry expires the records at the end of a free period of 90 days by default (configurable by SV voting),
 so that the traffic cost of creating and renewing them covers their storage cost.
-This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer and holder can either
-jointly renew it without burning CC by re-creating it via the `CredentialFactory`, which results in a new `createdAt`,
-or its issuer or holder can extend it on their own, optionally by burning CC, as described in [Extended Expiration Durations](#extended-expiration-durations).
+This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer and holder
+jointly renew it by re-creating it via the `CredentialFactory`, which results in a new `createdAt`,
+either without burning CC or by paying for a longer lease, as described in [Extended Expiration Durations](#extended-expiration-durations).
 
 #### Extended Expiration Durations
 
-The registry supports extending the expiration of an existing record by burning CC.
+The registry supports leases beyond the free period, paid by burning CC.
 The default fee is `1.0 USD/year` (configurable by SV voting).
-An extension archives the record and creates a replacement with the same claims, the same `createdAt`, and a new `expiresAt`.
 
-The holder or issuer can request such an extension on their own, as the extension does not change the claims of the credential.
-They do so by initiating a Token Standard transfer where:
+A new record expires at its requested `CredentialParams.expiresAt`, which must be in the future and not later than `validUntil`.
+Without one, it expires at `createdAt` plus the free period, capped at `validUntil` if that is set.
 
-- `sender` is equal to the `issuer` or `holder` of the credential to extend
-- `amount` is equal to the amount of CC to burn
-- `receiver` is equal to the party `cip-tbd_credential-manager::1220000000000000000000000000000000000000000000000000000000000000abcd`
-- `memo` is equal to `cip-tbd/memo:request=extend-credential-expiry`
-- `extraArgs.context` stores the contract-id of the credential to be extended in `cip-tbd/credential-cid` as an `AV_ContractId`
-
-Note that setting the contract-id in `extraArgs.context` requires wallet apps to support this feature explicitly.
-With `memo` we refer to the value of the `splice.lfdecentralizedtrust.org/reason` key in the transfer's `meta`,
-which wallets typically show as a "memo" or "Description" field.
-
-The new expiry time is computed as follows:
+The fee of a `CredentialFactory_UpdateCredentials` is computed over all its records, in days at full precision:
 
 ```text
-purchasedDuration = floor(amount * coin price / yearly fee * 365) days
-newExpiresAt0     = max(expiresAt, transfer.requestedAt) + freePeriod + purchasedDuration
-newExpiresAt      = min(newExpiresAt0, validUntil)    -- only if validUntil is set
+freeUntil      = requestedAt + freePeriod
+leaseToPay     = sum over new records of      max(0, expiresAt - freeUntil)
+remainingLease = sum over archived records of max(0, expiresAt - requestedAt)
+fee            = max(0, leaseToPay - remainingLease) / 365 * yearly fee
 ```
 
-where `transfer.requestedAt` is the wallet-provided timestamp on the Token Standard transfer, which is checked to be in the past and at most 24 hours old.
-The 24 hours leave external parties time to prepare and sign the transfer before submitting it.
-The registry rejects extension requests where `newExpiresAt` is not later than the current `expiresAt`, or not in the future,
-so that no CC is burned without effect.
+It is burned in CC at the CC price of the `ExternalPartyConfigState` in the choice context.
+Renewing a record before it expires thus costs only the lease beyond its old `expiresAt` plus the free period, as the free period is de facto covered by the traffic of the renewal.
+The `requestedAt` of an update must not be before the `createdAt` of the records it archives, so that the credit of their remaining lease cannot be inflated.
 
-A paid extension also adds the free period, as that is de facto covered by the traffic paid for the extension transaction.
-An extension that burns no CC adds only the free period. Like re-publishing through the `CredentialFactory`, it is free, but it needs only the issuer or the holder, not both.
+The update names the paying party in `cip-tbd/extended-expiry-paid-by` in `extraArgs.meta` and passes its CC holdings in `cip-tbd/extended-expiry-funding` in `extraArgs.context`.
+The payer must be one of the `actors`, but can differ from the issuer and the holder; it gets the change back.
+Updates without a fee must not set these entries.
 
 #### Canton Credential Registry Limits
 
@@ -367,8 +357,8 @@ A credential record is accepted by the Canton Credential Registry only if all of
   Note that `validFrom` may be earlier than `createdAt`, so that credentials can be registered even within their validity period.
 
 The registry sets `createdAt` to the `requestedAt` argument of `CredentialFactory_UpdateCredentials`, which is checked to be in the past and at most 24 hours old.
-It sets the initial `expiresAt` to `createdAt` plus the free period, capped at `validUntil` if that is set.
-`expiresAt` is never later than `validUntil`, and an extension never moves it earlier.
+The 24 hours leave external parties time to prepare and sign the update before submitting it.
+`expiresAt` is set as described in [Extended Expiration Durations](#extended-expiration-durations), and is never later than `validUntil`.
 
 The size limits are advertised via the [Credential Registry Info API](#credential-registry-info-api). Other registries MAY choose different limits.
 
@@ -510,7 +500,7 @@ retrieve only credentials whose validity period is currently effective.
 The record expiry time `expiresAt` is deliberately separate from `validUntil`:
 it reflects the registry's storage policy for the record,
 whereas the validity period is part of the credential's semantics as agreed between issuer and holder.
-This separation allows registries to expire and re-create records (e.g., for [paid extensions](#extended-expiration-durations))
+This separation allows registries to expire and re-create records (e.g., for [paid renewals](#extended-expiration-durations))
 without changing the meaning of the credential.
 
 ### Last-Write-Wins Semantics for Duplicates
@@ -550,8 +540,8 @@ The Canton Credential Registry is expected to be implemented as follows:
 
 1. The Splice Daml code is changed so that there is:
    1. A template that implements the `Credential` interface and serves to record credentials in the registry.
-   2. An implementation of the `CredentialFactory`, so that issuers and holders can jointly publish credentials to the registry.
-   3. A Token Standard `TransferFactory` implementation on the registry that supports [extending the expiration](#extended-expiration-durations) of credentials, optionally by burning CC.
+   2. An implementation of the `CredentialFactory`, so that issuers and holders can jointly publish and renew credentials in the registry, optionally paying for a [longer lease](#extended-expiration-durations) by burning CC.
+   3. The free period and the yearly fee as optional fields of `AmuletConfig` that default to the values of this CIP, so that SVs can change them by vote.
 2. The Scan app backend running on SV nodes implements the HTTP endpoints of the Credential Registry Query API and the Credential Registry Publication API,
    so that any Scan app can be used to interact with the Canton Credential Registry.
    The Scan app internally indexes all credentials in its backing Postgres DB, including recently archived ones,
