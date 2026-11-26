@@ -282,6 +282,7 @@ Clients read from a registry with `n` backends as follows, where `f = ⌊(n − 
 4. Otherwise fail with 503, so that the caller retries.
 
 A lookup by contract id can skip step 1 and compare only the returned `credential`, which never changes for a contract id; it may then still return a just-archived record.
+JSON comparison relies on the single canonical time format that the OpenAPI specifies, so that equal times are equal strings.
 
 ##### Rich Credential Lookup
 
@@ -306,7 +307,7 @@ The `CredentialFactory` Daml interface and the HTTP API endpoint are specified i
 Splice adds a decentralized base credential registry that is run by the SV nodes as part of the Global Synchronizer.
 Its admin party is the `dso` party, and it implements all the APIs defined above, including the optional Credential Registry Publication API.
 It sets `revokableBy` to `[[holder], [issuer]]` on all its records, so that either the holder or the issuer can revoke a record on their own.
-It uses a retention window of 7 days for the events served by the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api).
+It uses a retention window of 7 days for the events served by the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api), and accepts an `asOf` up to 30 minutes behind `publishedUntil`.
 
 By default, there is no Canton Coin (CC) payment required for creating credential records in the registry.
 Instead, the registry expires the records at the end of a free period of 90 days by default (configurable by SV voting),
@@ -321,7 +322,7 @@ The registry supports leases beyond the free period, paid by burning CC.
 The default fee is `1.0 USD/year` (configurable by SV voting).
 
 A new record expires at its requested `CredentialParams.expiresAt` or, without one, at `createdAt` plus the free period, capped at `validUntil` if that is set.
-The registry rejects an `expiresAt` that is not in the future or that is later than `validUntil`.
+The registry rejects an `expiresAt`, requested or not, that is not in the future or that is later than `validUntil`.
 
 The fee of a `CredentialFactory_UpdateCredentials` is computed over all its records and burned once:
 
@@ -519,14 +520,16 @@ This keeps writes cheap and contention-free while still giving all clients a con
 
 The query APIs order and evaluate records by LET rather than by record time:
 
-- LET is the time that a transaction's Daml code observes, so a query at `asOf` agrees with the time that on-ledger checks, such as those of validity periods, use.
-- Every create event carries its LET, also when a backend learns a contract from an ACS snapshot instead of from the transaction that created it.
+- LET is the time that Daml code observes, so `effectiveOnly` at `asOf` agrees with the validity checks that Daml code makes on-ledger.
+- Every create event carries its LET, also when a backend learns a contract from an ACS snapshot, so backends compute the same results however they started.
 
-The price is a publication lag. A transaction's LET may lie before its record time, up to the synchronizer's ledger time tolerance, so a backend that has processed record time `t` can still receive a transaction with a LET before `t`.
-Registries therefore serve results only up to `publishedUntil`, which trails the processed record time by a configured upper bound on that tolerance.
+The price is a publication lag. A transaction's LET may lie up to the synchronizer's ledger time tolerance before its record time, so a backend that has processed all transactions up to record time `t` can still receive one with a LET before `t`.
+Registries therefore serve results only up to `publishedUntil`, which trails that record time by a configured bound of at least the synchronizer's `ledgerTimeRecordTimeTolerance`.
+As that tolerance is a dynamic synchronizer parameter, the bound must also cover any value it may be changed to.
 New records thus become visible only after that delay, which the discovery use cases of this CIP tolerate.
 
-The APIs serve one synchronizer per registry, which keeps them simple for registries such as the Canton Credential Registry that use a single synchronizer.
+The APIs serve one synchronizer per registry. This suffices for the Canton Credential Registry and keeps the APIs simple; registries on several synchronizers are left to a future version.
+Records reassigned onto the registry's synchronizer keep their original LET and would change results already served, so registries do not serve reassigned records.
 
 ## Backwards Compatibility
 
