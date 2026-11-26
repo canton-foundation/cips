@@ -259,9 +259,8 @@ They can do so by selecting, for each group of duplicates, the claim from the fi
 The API MAY return records whose `expiresAt` has passed, but which the registry has not yet archived.
 Clients SHOULD ignore `expiresAt` when choosing a record, as it is the validity period given by `validFrom` and `validUntil` that determines whether a credential is effective.
 
-Note that operations that re-create a record, such as an [extension of its expiration](#extended-expiration-durations),
-produce a new contract with a new LET. Such a re-created record thus counts as the latest write,
-even if its `createdAt` is older than that of its duplicates.
+Note that a [renewal](#extended-expiration-durations) re-creates a record as a new contract with a new LET,
+so the renewed record counts as the latest write, even if its `createdAt` is older than that of a duplicate.
 
 ##### Bulk Credential Retrieval API
 
@@ -295,7 +294,7 @@ The purpose of the Credential Registry Publication API is to enable credential i
 
 Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
-This API uses the factory pattern pioneered in [CIP-0056](../cip-0056/cip-0056.md): the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder, executed by the parties in its `actors` argument. Each element of its `newCredentials` argument becomes one credential record with its claims, its validity period and, optionally, a requested `expiresAt`. Registries MAY charge a fee for an `expiresAt` beyond their default, and take the payment through registry-specific entries in the choice's `extraArgs`; see [Extended Expiration Durations](#extended-expiration-durations) for the Canton Credential Registry. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
+This API uses the factory pattern pioneered in [CIP-0056](../cip-0056/cip-0056.md): the `CredentialFactory` Daml interface provides a choice `CredentialFactory_UpdateCredentials` that allows for a bulk update of credentials with the same issuer and holder, executed by the parties in its `actors` argument. Each element of its `newCredentials` argument becomes one credential record with its claims, its validity period and, optionally, a requested `expiresAt`. Registries MUST reject an `expiresAt` they do not support rather than change it, and MAY charge a fee for one beyond their default, taken through registry-specific entries in the choice's `extraArgs`; see [Extended Expiration Durations](#extended-expiration-durations) for the Canton Credential Registry. A corresponding HTTP API endpoint allows retrieval of the context to call that choice.
 
 The `CredentialFactory` Daml interface and the HTTP API endpoint are specified in:
 
@@ -313,7 +312,7 @@ By default, there is no Canton Coin (CC) payment required for creating credentia
 Instead, the registry expires the records at the end of a free period of 90 days by default (configurable by SV voting),
 so that the traffic cost of creating and renewing them covers their storage cost.
 This CIP does not define automatic renewal. To keep a record beyond its `expiresAt`, its issuer and holder
-jointly renew it by re-creating it via the `CredentialFactory`, which results in a new `createdAt`,
+jointly renew it via the `CredentialFactory`, passing it in `oldCredentials` of an update that creates it again with a new `createdAt`,
 either without burning CC or by paying for a longer lease, as described in [Extended Expiration Durations](#extended-expiration-durations).
 
 #### Extended Expiration Durations
@@ -321,25 +320,25 @@ either without burning CC or by paying for a longer lease, as described in [Exte
 The registry supports leases beyond the free period, paid by burning CC.
 The default fee is `1.0 USD/year` (configurable by SV voting).
 
-A new record expires at its requested `CredentialParams.expiresAt`, which must be in the future and not later than `validUntil`.
-Without one, it expires at `createdAt` plus the free period, capped at `validUntil` if that is set.
+A new record expires at its requested `CredentialParams.expiresAt` or, without one, at `createdAt` plus the free period, capped at `validUntil` if that is set.
+The registry rejects an `expiresAt` that is not in the future or that is later than `validUntil`.
 
-The fee of a `CredentialFactory_UpdateCredentials` is computed over all its records, in days at full precision:
+The fee of a `CredentialFactory_UpdateCredentials` is computed over all its records and burned once:
 
 ```text
-freeUntil      = requestedAt + freePeriod
-leaseToPay     = sum over new records of      max(0, expiresAt - freeUntil)
-remainingLease = sum over archived records of max(0, expiresAt - requestedAt)
-fee            = max(0, leaseToPay - remainingLease) / 365 * yearly fee
+freeUntil = requestedAt + freePeriod
+paidDays  = sum over new records n      of max(0, n.expiresAt - freeUntil)
+          - sum over archived records o of max(0, o.expiresAt - requestedAt)
+feeUsd    = max(0, paidDays) / 365 * yearly fee
+feeCc     = feeUsd / CC price of the ExternalPartyConfigState in the choice context
 ```
 
-It is burned in CC at the CC price of the `ExternalPartyConfigState` in the choice context.
-Renewing a record before it expires thus costs only the lease beyond its old `expiresAt` plus the free period, as the free period is de facto covered by the traffic of the renewal.
-The `requestedAt` of an update must not be before the `createdAt` of the records it archives, so that the credit of their remaining lease cannot be inflated.
+Durations are in days without rounding.
+Renewing a single record before it expires thus costs only the lease beyond its old `expiresAt + freePeriod`.
 
-The update names the paying party in `cip-tbd/extended-expiry-paid-by` in `extraArgs.meta` and passes its CC holdings in `cip-tbd/extended-expiry-funding` in `extraArgs.context`.
-The payer must be one of the `actors`, but can differ from the issuer and the holder; it gets the change back.
-Updates without a fee must not set these entries.
+A paid update names the payer in `cip-tbd/extended-expiry-paid-by` in `extraArgs.meta` and passes the payer's CC holdings in `cip-tbd/extended-expiry-funding` in `extraArgs.context`.
+Its `actors` are then the issuer, the holder and the payer; the payer can differ from both and gets the change back.
+The registry rejects these entries in an update without a fee.
 
 #### Canton Credential Registry Limits
 
@@ -358,6 +357,7 @@ A credential record is accepted by the Canton Credential Registry only if all of
 
 The registry sets `createdAt` to the `requestedAt` argument of `CredentialFactory_UpdateCredentials`, which is checked to be in the past and at most 24 hours old.
 The 24 hours leave external parties time to prepare and sign the update before submitting it.
+`requestedAt` must also not be before the `createdAt` of any record the update archives, so that the credit of their remaining lease cannot be inflated.
 `expiresAt` is set as described in [Extended Expiration Durations](#extended-expiration-durations), and is never later than `validUntil`.
 
 The size limits are advertised via the [Credential Registry Info API](#credential-registry-info-api). Other registries MAY choose different limits.
@@ -500,7 +500,7 @@ retrieve only credentials whose validity period is currently effective.
 The record expiry time `expiresAt` is deliberately separate from `validUntil`:
 it reflects the registry's storage policy for the record,
 whereas the validity period is part of the credential's semantics as agreed between issuer and holder.
-This separation allows registries to expire and re-create records (e.g., for [paid renewals](#extended-expiration-durations))
+This separation allows registries to expire and re-create records (e.g., for [renewals](#extended-expiration-durations))
 without changing the meaning of the credential.
 
 ### Last-Write-Wins Semantics for Duplicates
