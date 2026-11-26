@@ -17,8 +17,8 @@
 
 A Canton account today is tied to the wallet that created it. The same recovery phrase imported into another wallet usually yields a different key or a different party, and even with the right party the other wallet cannot see the account's non-CC holdings or build transactions on them, because those contracts are visible only to the party's hosting validator. This CIP defines six parts that together make a Canton account portable across every conforming wallet, the way an EVM address works in every EVM wallet:
 
-1. **UCA-1 Key derivation.** One derivation path for Canton keys on the registered SLIP-0044 coin type, plus a registry of named legacy schemes so existing accounts stay importable.
-2. **UCA-2 Deterministic party id and discovery.** New parties take a hint derived from the key, so a key maps to one party everywhere; a discovery endpoint finds parties created before this rule.
+1. **UCA-1 Key derivation.** One derivation scheme for Canton keys on the registered SLIP-0044 coin type, with the namespace key and the protocol signing keys on separate branches so signing keys rotate without changing the partyID, plus a registry of named legacy schemes so existing accounts stay importable.
+2. **UCA-2 Deterministic party id, account credential and discovery.** New parties take a hint derived from the key, so a key maps to one party everywhere. Every party, including those created before this rule, can carry an account credential signed by its namespace key, and a discovery endpoint finds parties by key or account identifier.
 3. **UCA-3 Host data service.** The validator hosting a party serves that party's contracts, for disclosure, to any wallet that proves control of the party's key, so the wallet can prepare transactions on its own node.
 4. **UCA-4 Portable hosting.** The owner can add another validator as a host through party replication, and later move.
 5. **UCA-5 Package availability.** A shared package registry so that the nodes preparing, executing and confirming a dApp's transactions all have its packages.
@@ -33,7 +33,10 @@ The keywords MUST, SHOULD and MAY are used as in RFC 2119.
 ### UCA-1 Key derivation
 
 1. **Mnemonic.** BIP-39, English wordlist, 12 or 24 words, empty passphrase by default.
-2. **Derivation.** ed25519 with SLIP-0010 hardened derivation on the path `m/44'/6767'/a'/0'/0'`, where 6767 is the SLIP-0044 coin type registered for Canton Coin and `a` is the account index (0 for the first account).
+2. **Derivation.** ed25519 with SLIP-0010 derivation (hardened at every level), where 6767 is the SLIP-0044 coin type registered for Canton Coin and `a` is the account index (0 for the first account):
+   - **Namespace key** `m/44'/6767'/a'/0'/0'`. Its fingerprint is the party's namespace, so it fixes the partyID. It signs topology changes and the UCA-2 account credential.
+   - **Protocol signing key** `m/44'/6767'/a'/1'/i'`, index `i` from 0. These keys are listed in the party's `PartyToKeyMapping` and sign transactions. A wallet rotates to index `i+1`, or moves to a threshold set, without touching the namespace key, so the partyID never changes.
+   - A wallet MAY use the namespace key as the first signing key, as external party onboarding does by default; import still works because UCA-2 discovery returns the current `PartyToKeyMapping`.
 3. **Raw key.** A wallet MUST also accept a raw 32-byte ed25519 private key (64 hex characters).
 4. **Legacy scheme registry.** Derivations used before this CIP are published as named schemes in the CIP repository. The first entry is `wallet-sdk-seed32`: the first 32 bytes of the BIP-39 seed, as in the Wallet SDK guide. Wallets with their own scheme register it, for example `vendor-native-v1`: `sha256(bip39_seed || "VENDOR_CONTEXT")`.
 5. **Import order.** On import a wallet derives the standard key and every registered legacy key, asks UCA-2 which of them control existing parties, and shows the user what it found.
@@ -46,12 +49,16 @@ The keywords MUST, SHOULD and MAY are used as in RFC 2119.
 2. **Discovery for older parties.** Scan MUST serve `GET /api/scan/v0/namespaces/{fingerprint}/parties`, listing each party in that namespace with its hosts, their permissions and the confirmation threshold, as recorded in the global synchronizer's topology state, plus each host's UCA-3 base URL when published.
 3. **Access.** The discovery endpoint MUST be reachable by any wallet, directly or through a public mirror, since Scan instances may restrict direct access.
 4. **Wallet behaviour.** On import a wallet MUST use the deterministic party when it exists, otherwise query discovery, and MUST NOT silently create a new party when one already exists.
+5. **Account credential.** The deterministic identifier is also carried as a credential associated with the partyID, so it covers every party whatever its hint, with no migration. The credential states the account identifier `hex(sha256(namespace_public_key))[0:48]`, the partyID, the namespace public key, the current signing keys and threshold, the hosts and the issue time, and is signed by the party's namespace key. A verifier checks the signature and checks against topology state that the key's fingerprint is the party's namespace; no issuer is trusted. A conforming wallet MUST issue the credential for every party it creates or imports and refresh it when keys or hosts change. Its representation follows the Identity & Metadata SIG credentials standard once published; the reference code uses a minimal form until then.
+6. **Discovery by identifier.** Discovery MUST also answer by account identifier, returning the parties whose credential carries it.
 
 ### UCA-3 Host data service
 
 A party's non-CC contracts are held only by the nodes hosting its stakeholders. The host is therefore the one place a wallet on another node can get them. Every validator that hosts external parties MUST run this service for those parties. It never holds a key.
 
-**Authentication.** Each request carries `X-UCA-Party`, `X-UCA-Ts` (unix ms) and `X-UCA-Sig`: an ed25519 signature by the party's key over `ts \n method \n path \n sha256(body)`. Requests older than 60 seconds or replayed are refused. Only the party itself can read its data.
+**Implementations.** This section defines an interface, not a component. Any implementation that passes the conformance suite conforms. The Wallet Gateway is a natural carrier: when it exposes these endpoints with party-key authentication, every wallet works with it. No conforming wallet may depend on one vendor's implementation.
+
+**Authentication.** Each request carries `X-UCA-Party`, `X-UCA-Ts` (unix ms) and `X-UCA-Sig`: an ed25519 signature by one of the party's current signing keys (UCA-1) over `ts \n method \n path \n sha256(body)`. Requests older than 60 seconds or replayed are refused. Only the party itself can read its data; no node user token is involved.
 
 **Required endpoints** (prefix `/uca/v1`):
 
@@ -79,7 +86,7 @@ A party's non-CC contracts are held only by the nodes hosting its stakeholders. 
 
 ### UCA-4 Portable hosting
 
-1. **Add a host.** The owner MAY add the importing wallet's validator as an additional host by signing the `PartyToParticipant` change with the party key. The new host receives the party's active contract set through party replication: the documented offline procedure today, online replication when the Party Mobility work is delivered.
+1. **Add a host.** The owner MAY add the importing wallet's validator as an additional host by signing the `PartyToParticipant` change with the party's namespace key. The new host receives the party's active contract set through party replication: the documented offline procedure today, with party-level freezing from Party Mobility Phase 1, and online replication when the later Party Mobility work is delivered. UCA-4 defines the wallet-side flow and its conformance checks; the protocol work belongs to Party Mobility.
 2. **Move.** Removing the old host waits until party offboarding is supported by Canton. Until then, multi-hosting is the supported form of moving.
 3. **Rights and pre-approvals.** Rights granted to a party, such as a Featured App right, belong to the party and are unaffected by hosting. Transfer pre-approvals name a provider and expire; the new host recreates them in the same flow as the host change.
 4. **Threshold safety.** A host change MUST NOT leave fewer fully onboarded hosts than the party's confirmation threshold.
@@ -89,13 +96,14 @@ A party's non-CC contracts are held only by the nodes hosting its stakeholders. 
 1. **Shared registry.** dApp packages are published to a shared registry with package id, source hash and an independent audit report.
 2. **Vetting policy.** Hosts conforming at Level 3 vet registry packages whose publisher holds a Featured App right or meets the registry's audit bar, without per-dApp negotiation.
 3. **Availability check.** UCA-3 `packages` and the registry together tell a wallet whether every node in a transaction's path can process it.
+4. **Per-party choice and per-host state.** When parties can choose whether to use a given package, a wallet needs that choice and the vetting state of each confirming host before it submits. UCA-5 asks the package directory work to expose both, queryable per party and per host.
 
 ### UCA-6 Host share of app rewards
 
 When a party is served by a wallet on another validator, the party's host still does work: it runs the UCA-3 service and confirms every transaction. Without a share of the rewards those transactions produce, hosts have no reason to serve other wallets, and portability stalls. UCA-6 gives the host a fixed share, using reward mechanisms that already exist.
 
 1. **Scope.** Applies to transactions prepared through UCA-3 data by a wallet whose validator is not a host of the party, and that carry an app reward (a featured activity marker, or token-standard app reward metadata).
-2. **Split.** The reward beneficiaries are split between the serving wallet's provider party and the party's hosting validators: by default **70% serving wallet, 30% hosts**, the host share divided equally among the party's hosts with Confirmation permission. The final percentages are set by the Tokenomics Committee and published with this CIP; wallets do not choose them per transaction.
+2. **Split.** The reward beneficiaries are split between the serving wallet's provider party and the party's hosting validators: by default **70% serving wallet, 30% hosts**, the host share divided equally among the party's hosts with Confirmation permission. The final percentages are set by the Tokenomics Committee, or by the Super Validators' CIP on host rewards where that CIP covers this case, and published with this CIP; wallets do not choose them per transaction. The author contributes per-transaction marker and traffic data from a live application to that process.
 3. **Mechanism.** No protocol change. Featured activity markers already accept `beneficiaries` with weights in (0, 1] summing to 1.0 (up to 20 beneficiaries), and the token standard carries `app-reward-beneficiaries` and `app-reward-beneficiary-weights` metadata, validated to sum to 1.0. Splitting divides an existing reward; it never increases it, so it adds no inflation and leaves the 1:1 marker-to-burn rule untouched.
 4. **Host identity.** Each host publishes its reward party in its UCA-3 metadata; UCA-2 discovery returns it.
 5. **Own wallet.** When the serving wallet's validator is itself a host of the party, the split does not apply.
@@ -150,6 +158,19 @@ Each gap below was met by application developers on Canton mainnet in 2026, in a
 | 2026-11-21 | A launchpad and a DEX exposed no individual trades through a public API; integration needed each venue's cooperation. | UCA-3, UCA-5 |
 | 2026-11-21 | No standard key exists for a transfer memo. CIP-0056 defines `splice.lfdecentralizedtrust.org/reason` for explaining a withdrawal or abort; applications reuse it as a memo, and a DEX documents a memo without naming a key. | Related work |
 
+## Relation to ongoing work
+
+UCA is the user-side contract that connects the following efforts. Each keeps its own scope; UCA fixes what a wallet can rely on and how conformance is checked.
+
+| Area | Ongoing work | What UCA adds |
+|---|---|---|
+| Key derivation | Wallet SDK issue #2164; security specialists | One scheme with separate namespace and signing branches, legacy registry, test vectors |
+| Identifier and discovery | Identity & Metadata SIG credentials proposal | Account credential profile and discovery by key or identifier |
+| Host data | Wallet Gateway | Implementation-neutral interface with party-key authentication |
+| Hosting | Party Mobility Phase 1 grant and later phases | Wallet-side host change flow, threshold safety, conformance |
+| Packages | Package directory and per-party package choice | Per-host vetting state for wallets |
+| Host rewards | Super Validator discussion and upcoming CIP | Default split, existing beneficiary mechanism, live data |
+
 ## Rationale
 
 - **Use what the protocol already allows.** Preparing and executing nodes need not host the party. The missing pieces are conventions and data access, which this CIP adds without protocol changes. Only full moving waits for party replication and offboarding.
@@ -163,6 +184,7 @@ Each gap below was met by application developers on Canton mainnet in 2026, in a
 
 - Existing parties keep their ids, hosts and contracts. Nothing moves without the owner's signature.
 - Existing derivations stay valid through the legacy registry.
+- Parties created before this CIP, with any hint, are covered by the UCA-2 account credential without moving.
 - UCA-3 is additive and reads only what the host already holds for the party.
 - CIP-0103 connections are unchanged.
 
@@ -173,10 +195,14 @@ Each gap below was met by application developers on Canton mainnet in 2026, in a
 - **Prepared transaction review.** Wallets MUST decode and show the effect of a prepared transaction before signing, as for any external signing.
 - **Discovery privacy.** UCA-2 exposes only what the topology state already exposes to connected participants: party ids and their hosts. No contracts or balances.
 - **Hosting changes.** UCA-4 needs the party's own signature and keeps the confirmation threshold.
+- **Key separation.** The namespace key, which fixes the partyID, is used only for topology changes and the account credential. Day-to-day signing uses separate keys that can rotate, so a compromised signing key is replaced without changing the account.
+- **Credential trust.** The account credential needs no issuer: it is valid only if signed by the key whose fingerprint is the party's namespace in topology state.
 
 ## Reference implementation
 
-Built in the open as separate work packages any team can take on through the Canton Dev Fund (companion RFP draft "Universal Canton Accounts"):
+Reference code for UCA-1, UCA-2 (including the account credential), UCA-3 and UCA-6 is in the `code/` folder next to this document, in TypeScript and Python, with test vectors. The TypeScript and Python implementations produce identical keys and identical credential signatures.
+
+The production work is built in the open as separate work packages any team can take on through the Canton Dev Fund:
 
 1. UCA-1 in the Wallet SDK (continuing issue #2164), with test vectors and the legacy registry.
 2. UCA-2 as a Scan endpoint over topology state, with a public mirror.
