@@ -250,17 +250,17 @@ The API also supports looking up a single active record by contract id.
 
 The API returns the LET of the transaction that created each credential contract, and orders the results by LET descending, with contract id ascending as the tie-break.
 
-Two credential records are duplicates if they have the same `issuer` and `holder`, and both contain a claim with the same `subject` and `property`.
-When querying with a fully specified query `(property, issuer, holder, subject)` and `effectiveOnly = true`, all returned records are duplicates of each other, and the first returned record is the one that should be used for last-write-wins semantics.
+Two claims are duplicates if they have the same key `(issuer, holder, subject, property)`, where `issuer` and `holder` are those of the records containing the claims, and an unset `subject` stands for the `holder`.
+When querying with a fully specified query `(property, issuer, holder, subject)` and `effectiveOnly = true`, all returned records contain a claim with the queried key, and the first returned record is the one that should be used for last-write-wins semantics.
 
 For queries that are not fully specified, or that do not set `effectiveOnly`, clients must implement the last-write-wins semantics themselves.
-They can do so by selecting, for each group of duplicates, the claim from the first record of that group in the returned order whose validity period covers `asOf`.
+They can do so by selecting, for each key, the claim with that key from the first record in the returned order that contains such a claim and whose validity period covers `asOf`.
 
 The API MAY return records whose `expiresAt` has passed, but which the registry has not yet archived.
 Clients SHOULD ignore `expiresAt` when choosing a record, as it is the validity period given by `validFrom` and `validUntil` that determines whether a credential is effective.
 
 Note that a [renewal](#extended-expiration-durations) re-creates a record as a new contract with a new LET,
-so the renewed record counts as the latest write, even if its `createdAt` is older than that of a duplicate.
+so the renewed record counts as the latest write, even if its `createdAt` is older than that of a record with a duplicate claim.
 
 ##### Bulk Credential Retrieval API
 
@@ -322,7 +322,7 @@ The registry supports leases beyond the free period, paid by burning CC.
 The default fee is `1.0 USD/year` (configurable by SV voting).
 
 A new record expires at its requested `CredentialParams.expiresAt` or, without one, at `createdAt` plus the free period, capped at `validUntil` if that is set.
-The registry rejects an `expiresAt`, requested or not, that is not in the future or that is later than `validUntil`.
+The registry rejects a record whose resulting `expiresAt` is not in the future, and a requested `expiresAt` that is later than `validUntil`.
 
 The fee of a `CredentialFactory_UpdateCredentials` is computed over all its records and burned once:
 
@@ -369,7 +369,8 @@ The size limits are advertised via the [Credential Registry Info API](#credentia
 Together the APIs defined in this CIP and the Canton Credential Registry enable
 defining standard ways to discover applications and metadata about them.
 It works by applications using self-published credentials in the Canton Credential Registry to advertise their capabilities and metadata, which can then be discovered by apps by querying the registry.
-Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X, X)`.
+Clients look up property `p` of party `X` with the [Credential Lookup API](#credential-lookup-api) query `(p, X, X, X)` and `effectiveOnly = true`,
+and use the claim of the first returned record, as described in [Handling Duplicates](#handling-duplicates).
 
 The concrete claims to use in these credentials are usually defined in CIPs.
 This works without conflicts as we expect that the properties in a credential's claims have the form `namespace/property` and the namespaces are one of the following:
