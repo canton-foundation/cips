@@ -1,0 +1,47 @@
+{
+  "note": "Public BIP-39 test mnemonic. Never use for funds.",
+  "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+  "passphrase": "",
+  "keys": [
+    {
+      "scheme": "uca-1",
+      "path": "m/44'/6767'/0'/0'/0'",
+      "privateKey": "b2aaa80a4e5d312b9752e86f34d575df572ebd3298531c848026fa6274a68a12",
+      "publicKey": "d80f86404d93ab50d979727fea5e568310f7c603cae6de9d52c9d0351f3f7ab8",
+      "hint": "8bc4d03fca18a26e13379047c66363c8227b5e12c2dcd184"
+    },
+    {
+      "scheme": "uca-1",
+      "path": "m/44'/6767'/1'/0'/0'",
+      "privateKey": "29762649ff5c247c17b76031ff0f4f950dd0932eab498adb40897c660b8d880b",
+      "publicKey": "62efd6992c6d21b2e839571ea2be69bce18b54b9ed5ec085161441cfc47809cd",
+      "hint": "ce6e88bc990934f0a64d5249d46448e5a73e8f053e02e644"
+    },
+    {
+      "scheme": "wallet-sdk-seed32",
+      "privateKey": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc1",
+      "publicKey": "c5785e1865b708938aff8161d573006496663b1aa10834e396dc566869a2c66a",
+      "hint": "ed0f8784166e0abfff51a9aff9ba259d8c028ed3b843ec1b"
+    },
+    {
+      "scheme": "vendor-native-v1",
+      "privateKey": "cb72b723e4c9702f1e0714088a0f80db857b96a8632f1abff89258e534645953",
+      "publicKey": "99421992d3d08bb965c27750bab5dfbfff584b533a9a7db85b048658e21ebb70",
+      "hint": "497b1582d67e117115ba40f399dc3475bdfe5cb051da3a68"
+    }
+  ],
+  "signingKeys": [
+    {
+      "scheme": "uca-1-signing",
+      "path": "m/44'/6767'/0'/1'/0'",
+      "privateKey": "ec16f18ae2e34023d9b97634b275e7fe603267efd503c4c6503bfa3c9e397be0",
+      "publicKey": "747b3da9a820a47850d7c5a715698988d9c733669fd365e2a7a58ee13cde4af5"
+    },
+    {
+      "scheme": "uca-1-signing",
+      "path": "m/44'/6767'/0'/1'/1'",
+      "privateKey": "8542490a840ff56b301578addbf9cf7fdb470d34b5b280bc439213836c70f03d",
+      "publicKey": "a6d8e0add919bafaf4252d881a591336600168f8fb97ffcad8ae947a4acbf02b"
+    }
+  ]
+}
