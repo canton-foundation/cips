@@ -276,10 +276,10 @@ Registries SHOULD support a minimum retention window of 7 days to ensure that ex
 
 Clients read from a registry with `n` backends as follows, where `f = ⌊(n − 1) / 3⌋`:
 
-1. Fetch `publishedUntil` from `2f + 1` backends and take the `(f + 1)`-th highest value. Use it as `asOf`, or for events as the upper bound together with an explicit `limit`.
-2. Send the request to `2f + 1` backends.
+1. Fetch `publishedUntil` from all `n` backends and take the `(f + 1)`-th lowest value, which at least `2f + 1` backends report to have reached, `f + 1` of them honest. Use it as `asOf`, or for events as the upper bound together with an explicit `limit`, and keep it across retries.
+2. Send the request to `2f + 1` backends, and to the remaining ones if fewer than `f + 1` responses match.
 3. Accept a response once `f + 1` backends returned it, comparing as JSON rather than bytes. A 404 counts as a response; any other failure counts as a mismatch.
-4. Otherwise fail with 503, so that the caller retries.
+4. Otherwise fail with 503, so that the caller retries with the same `asOf`.
 
 A lookup by contract id can skip step 1 and compare only the returned `credential`, which never changes for a contract id; it may then still return a just-archived record.
 JSON comparison relies on the single canonical time format that the OpenAPI specifies, so that equal times are equal strings.
@@ -291,7 +291,7 @@ They ingest credentials through the [Bulk Credential Retrieval API](#bulk-creden
 
 #### Credential Registry Publication API
 
-The purpose of the Credential Registry Publication API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both, and also the paying party when it charges a fee. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
+The purpose of the Credential Registry Publication API is to enable credential issuers and holders to *jointly* create, update, and archive credentials in a third-party credential registry. Each credential registry MUST document whose authorization it requires to create a credential, and SHOULD require the authorization of both issuer and holder. The Canton Credential Registry requires both, and also the payer when the update names one. The specific workflows for obtaining this authorization and determining the claims of the credential are provided by the issuer and implemented in their credential issuance app.
 
 Implementing this API is optional for credential registries. They MAY decide to only support registry-internal workflows for creating credentials, and not offer third-party issuers the right to publish credentials to that registry.
 
@@ -307,7 +307,7 @@ The `CredentialFactory` Daml interface and the HTTP API endpoint are specified i
 Splice adds a decentralized base credential registry that is run by the SV nodes as part of the Global Synchronizer.
 Its admin party is the `dso` party, and it implements all the APIs defined above, including the optional Credential Registry Publication API.
 It sets `revokableBy` to `[[holder], [issuer]]` on all its records, so that either the holder or the issuer can revoke a record on their own.
-It uses a retention window of 7 days for the events served by the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api), and accepts an `asOf` up to 30 minutes behind `publishedUntil`.
+It uses a retention window of 7 days for the events served by the [Bulk Credential Retrieval API](#bulk-credential-retrieval-api), and accepts an `asOf` up to 1 hour behind `publishedUntil`.
 
 By default, there is no Canton Coin (CC) payment required for creating credential records in the registry.
 Instead, the registry expires the records at the end of a free period of 90 days by default (configurable by SV voting),
@@ -329,17 +329,17 @@ The fee of a `CredentialFactory_UpdateCredentials` is computed over all its reco
 ```text
 freeUntil = requestedAt + freePeriod
 paidDays  = sum over new records n      of max(0, n.expiresAt - freeUntil)
-          - sum over archived records o of max(0, o.expiresAt - requestedAt)
+          - sum over archived records o of max(0, o.expiresAt - max(requestedAt, o.createdAt + freePeriod))
 feeUsd    = max(0, paidDays) / 365 * yearly fee
 feeCc     = feeUsd / CC price of the ExternalPartyConfigState in the choice context
 ```
 
 Durations are in days without rounding.
-Renewing a single record before it expires thus costs only the lease beyond its old `expiresAt + freePeriod`.
+Only the paid lease that an archived record has left is credited, not its free period, so free periods do not add up across renewals.
 
 A paid update names the payer in `cip-tbd/extended-expiry-paid-by` in `extraArgs.meta` and passes the payer's CC holdings in `cip-tbd/extended-expiry-funding` in `extraArgs.context`.
 Its `actors` are then the issuer, the holder and the payer; the payer can differ from both and gets the change back.
-The registry rejects these entries in an update without a fee.
+An update without a fee accepts these entries, with the payer among the actors, and burns nothing.
 
 #### Canton Credential Registry Limits
 
@@ -352,13 +352,13 @@ A credential record is accepted by the Canton Credential Registry only if all of
 - it contains at most 32 claims.
 - its claims are unique per `(subject, property)` pair.
 - each claim property is at most 255 characters and each claim subject is at most 255 characters, so that a full party-id can appear as subject.
-- each claim value is at most 2047 characters.
+- each claim value is at most 4096 characters.
 - if both are set, `validUntil` is later than `validFrom`; and if set, `validUntil` is later than `createdAt`.
   Note that `validFrom` may be earlier than `createdAt`, so that credentials can be registered even within their validity period.
 
 The registry sets `createdAt` to the `requestedAt` argument of `CredentialFactory_UpdateCredentials`, which is checked to be in the past and at most 24 hours old.
 The 24 hours leave external parties time to prepare and sign the update before submitting it.
-`requestedAt` must also not be before the `createdAt` of any record the update archives, so that the credit of their remaining lease cannot be inflated.
+`requestedAt` must also not be before the `createdAt` of any record the update archives, so that the credit of their paid lease cannot be inflated.
 `expiresAt` is set as described in [Extended Expiration Durations](#extended-expiration-durations), and is never later than `validUntil`.
 
 The size limits are advertised via the [Credential Registry Info API](#credential-registry-info-api). Other registries MAY choose different limits.
@@ -529,8 +529,8 @@ Registries therefore serve results only up to `publishedUntil`, which trails tha
 As that tolerance is a dynamic synchronizer parameter, the bound must also cover any value it may be changed to.
 New records thus become visible only after that delay, which the discovery use cases of this CIP tolerate.
 
-The APIs serve one synchronizer per registry. This suffices for the Canton Credential Registry and keeps the APIs simple; registries on several synchronizers are left to a future version.
-Records reassigned onto the registry's synchronizer keep their original LET and would change results already served, so registries do not serve reassigned records.
+The APIs are built for registries that serve credential records assigned to a single synchronizer, such as the Canton Credential Registry, which keeps them simple.
+Registries that want to support several synchronizers use a separate `admin` party per synchronizer and duplicate their credentials across the synchronizers, so that consumers can use them without reassignment, which would lead to unwanted contention.
 
 ## Backwards Compatibility
 
