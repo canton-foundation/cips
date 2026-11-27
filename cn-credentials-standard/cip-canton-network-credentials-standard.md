@@ -554,6 +554,11 @@ The Canton Credential Registry is expected to be implemented as follows:
 
 ## Changelog
 
+- 2026-11-27: Ready for review.
+  Split the APIs into a Credential Record API, a Credential Registry Query API, and a Credential Registry Publication API;
+  renamed the DSO Credential Registry to Canton Credential Registry;
+  added BFT reads, `asOf` queries ordered by ledger effective time, and paid lease extensions by burning CC;
+  added rationale for the main design choices.
 - 2026-11-03: Revised draft
 - 2026-01-09: Initial draft
 
