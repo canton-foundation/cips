@@ -276,7 +276,7 @@ Registries SHOULD support a minimum retention window of 7 days to ensure that ex
 
 Clients read from a registry with `n` backends as follows, where `f = ⌊(n − 1) / 3⌋`:
 
-1. Fetch `publishedUntil` from all `n` backends and take the `(f + 1)`-th lowest value, which at least `2f + 1` backends report to have reached, `f + 1` of them honest. Use it as `asOf`, or for events as the upper bound together with an explicit `limit`, and keep it across retries.
+1. Fetch `publishedUntil` from all `n` backends, wait for at least `n − f` responses, and take the `(f + 1)`-th lowest of them. At least `n − 2f ≥ f + 1` backends report to have reached it, so at least one honest backend has, and the other honest backends follow, as `publishedUntil` never decreases. Use it as `asOf`, or for events as the upper bound together with an explicit `limit`, and keep it across retries.
 2. Send the request to `2f + 1` backends, and to the remaining ones if fewer than `f + 1` responses match.
 3. Accept a response once `f + 1` backends returned it, comparing as JSON rather than bytes. A 404 counts as a response; any other failure counts as a mismatch.
 4. Otherwise fail with 503, so that the caller retries with the same `asOf`.
